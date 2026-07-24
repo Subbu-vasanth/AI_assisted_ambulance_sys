@@ -1,0 +1,93 @@
+[
+  {
+    "hospital_id": "H001",
+    "name": "Coimbatore General Hospital",
+    "lat": 11.0018,
+    "lng": 76.9629,
+    "specialties": [
+      "general",
+      "trauma",
+      "cardiac"
+    ],
+    "capacity_status": "available",
+    "avg_response_seconds": 25,
+    "access_key": "h001-demo-key"
+  },
+  {
+    "hospital_id": "H002",
+    "name": "Kovai Heart & Vascular Institute",
+    "lat": 11.0168,
+    "lng": 76.9558,
+    "specialties": [
+      "cardiac"
+    ],
+    "capacity_status": "available",
+    "avg_response_seconds": 20,
+    "access_key": "h002-demo-key"
+  },
+  {
+    "hospital_id": "H003",
+    "name": "PSG Neuro Sciences Centre",
+    "lat": 10.9975,
+    "lng": 77.0011,
+    "specialties": [
+      "neuro",
+      "trauma"
+    ],
+    "capacity_status": "available",
+    "avg_response_seconds": 30,
+    "access_key": "h003-demo-key"
+  },
+  {
+    "hospital_id": "H004",
+    "name": "Ganga Ortho & Trauma Centre",
+    "lat": 11.0296,
+    "lng": 76.9401,
+    "specialties": [
+      "orthopedic",
+      "trauma"
+    ],
+    "capacity_status": "busy",
+    "avg_response_seconds": 45,
+    "access_key": "h004-demo-key"
+  },
+  {
+    "hospital_id": "H005",
+    "name": "KMCH Pulmonology & Critical Care",
+    "lat": 11.0412,
+    "lng": 76.9906,
+    "specialties": [
+      "pulmonology",
+      "general"
+    ],
+    "capacity_status": "available",
+    "avg_response_seconds": 35,
+    "access_key": "h005-demo-key"
+  },
+  {
+    "hospital_id": "H006",
+    "name": "Sri Ramakrishna General Hospital",
+    "lat": 10.9891,
+    "lng": 76.9645,
+    "specialties": [
+      "general",
+      "orthopedic"
+    ],
+    "capacity_status": "available",
+    "avg_response_seconds": 28,
+    "access_key": "h006-demo-key"
+  },
+  {
+    "hospital_id": "H007",
+    "name": "Coimbatore Cardiac & Neuro Institute",
+    "lat": 11.0089,
+    "lng": 76.9345,
+    "specialties": [
+      "cardiac",
+      "neuro"
+    ],
+    "capacity_status": "full",
+    "avg_response_seconds": 50,
+    "access_key": "h007-demo-key"
+  }
+]

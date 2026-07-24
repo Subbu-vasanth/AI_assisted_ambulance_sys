@@ -1,0 +1,8 @@
+mcp_config.json
+node_modules/
+.expo/
+dist/
+build/
+*.log
+.env.local
+.env.*.local

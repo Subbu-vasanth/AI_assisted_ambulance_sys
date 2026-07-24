@@ -1,0 +1,495 @@
+SOFTWARE REQUIREMENTS SPECIFICATION
+
+Connected Ambulance System with AI-Assisted Triage
+
+(Smart Emergency Dispatch & Hospital Coordination Platform)
+
+Version 1.0
+
+Prepared for Hackathon Submission
+
+Date: 11 July 2026
+
+Table of Contents
+
+TOC \h \o "1-3"
+
+1. Introduction
+
+1.1 Purpose
+
+This document specifies the software requirements for the Connected Ambulance System with AI-Assisted Triage (CAS-AIT). The system digitizes patient vitals capture during ambulance transit, applies rule-based and AI-assisted triage scoring, and orchestrates parallel, specialty-matched dispatch requests to nearby hospitals so that critically ill patients reach the most appropriate facility in the shortest possible time.
+
+This SRS is intended for the hackathon judging panel, development team members, and any future collaborators evaluating technical feasibility, scope, and system design.
+
+1.2 Scope
+
+The system covers three connected surfaces:
+
+Ambulance-side mobile/tablet application for vitals capture (device-integrated and manual fallback), symptom logging, and offline-first data sync.
+
+A triage and dispatch orchestration backend that scores urgency using an explainable rules engine (ESI-based) assisted by an LLM for symptom structuring, then broadcasts requests to specialty-matched hospitals in parallel.
+
+A hospital-side dashboard for receiving live requests, patient vitals, ETA, and confirming readiness to receive the patient.
+
+Out of scope for the hackathon MVP: direct integration with live hospital HMS/bed-management systems, payment/insurance processing, and legally binding e-signatures. These are flagged as future integration work requiring hospital partnerships.
+
+1.3 Definitions, Acronyms, and Abbreviations
+
+Term
+
+Definition
+
+ESI
+
+Emergency Severity Index — a 5-level, evidence-based triage algorithm used to prioritize patients by acuity.
+
+EMT
+
+Emergency Medical Technician — trained ambulance staff who may not include a nurse.
+
+MCP
+
+Model Context Protocol — a standard that lets an AI agent call external tools/services (used here to model the hospital network as callable tools).
+
+BLE
+
+Bluetooth Low Energy — used to connect vitals-monitoring hardware to the ambulance app.
+
+ETA
+
+Estimated Time of Arrival.
+
+SpO2
+
+Peripheral oxygen saturation, measured via pulse oximeter.
+
+Stand-down
+
+Notification sent to non-selected hospitals once a request is accepted elsewhere.
+
+1.4 References
+
+Emergency Severity Index (ESI), v4 Implementation Handbook — Agency for Healthcare Research and Quality (AHRQ).
+
+Paschim Banga Khet Mazdoor Samity & Ors vs State Of West Bengal (1996) — right to emergency medical treatment.
+
+Parmanand Katara vs Union Of India (1989) — Supreme Court ruling on mandatory emergency stabilization.
+
+Google Maps Platform — Directions API, Distance Matrix API documentation.
+
+Anthropic Model Context Protocol (MCP) specification.
+
+1.5 Overview
+
+Section 2 describes the product perspective, key assumptions, and constraints. Section 3 details functional requirements by module. Section 4 covers external interface requirements. Section 5 covers non-functional requirements. Section 6 describes system architecture. Section 7 defines core data models. Section 8 walks through primary use case scenarios. Section 9 lists the proposed technology stack.
+
+2. Overall Description
+
+2.1 Product Perspective
+
+CAS-AIT is a new, standalone system composed of three client surfaces (ambulance app, hospital dashboard, admin/ops view) connected to a central backend that performs triage scoring and dispatch orchestration. It is designed to interoperate with existing hospital systems in future phases but does not require pre-existing hospital IT infrastructure to run the MVP.
+
+2.2 Product Functions (Summary)
+
+Capture patient vitals automatically from BLE-connected monitoring hardware, with manual keypad entry as fallback.
+
+Capture free-text/voice symptom descriptions and structure them via LLM-assisted parsing.
+
+Compute an explainable urgency score using an ESI-based rules engine, with AI-suggested category and human (EMT) confirmation.
+
+Identify specialty-matched, radius-filtered hospitals using live location and a hospital capability database.
+
+Broadcast dispatch requests to all matched hospitals in parallel; accept the first qualified confirmation; auto-notify others to stand down.
+
+Stream patient vitals, symptoms, urgency score, and live ETA to the receiving hospital's dashboard.
+
+Buffer data locally when offline and sync automatically once connectivity resumes, with SMS fallback for critical alerts.
+
+2.3 User Classes and Characteristics
+
+User Class
+
+Description
+
+Technical Proficiency
+
+EMT / Ambulance Attendant
+
+Captures vitals and symptoms during transit; confirms AI-suggested urgency tag.
+
+Low–Medium; UI must be usable one-handed, under stress, with minimal typing.
+
+Hospital Duty Staff / Dashboard Operator
+
+Receives dispatch requests, views patient data, confirms readiness.
+
+Medium; operates on a desktop/tablet dashboard in a fixed ward location.
+
+System Administrator
+
+Manages hospital directory, specialty tags, capacity toggles (MVP).
+
+High; back-office configuration access.
+
+2.4 Operating Environment
+
+Ambulance app: Android/iOS tablet or phone mounted in the ambulance, BLE-paired with vitals hardware.
+
+Hospital dashboard: Web application accessible on desktop/tablet browsers within the hospital emergency department.
+
+Backend: Cloud-hosted (containerized), accessible over HTTPS/WebSocket.
+
+2.5 Design and Implementation Constraints
+
+No public real-time API exists for hospital bed/ICU capacity in India; MVP uses a simulated/mocked capacity database with manual status toggle, clearly disclosed as a future hospital-integration dependency.
+
+Ambulances cannot assume constant EMT/nurse staffing — the UI must remain functional with an untrained attendant present.
+
+Hospitals cannot legally refuse emergency patients (Parmanand Katara precedent) — the system must not model hospital response as "accept/reject" but as "confirm readiness / best-fit."
+
+Network connectivity cannot be assumed continuous throughout a transit route — offline-first design is mandatory, not optional.
+
+Final triage decisions must remain human-confirmable; the AI model must not be the sole authority on urgency classification, for liability and safety reasons.
+
+2.6 Assumptions and Dependencies
+
+Google Maps Platform API access (Directions + Distance Matrix + Places) is available and within free/paid quota for the demo.
+
+Participating hospitals in the MVP are represented by a seeded directory with specialty tags and (simulated) capacity status.
+
+BLE vitals hardware (pulse oximeter, BP cuff) is available for hardware-integration demo; a simulator/mock data generator is an acceptable substitute for the hackathon if hardware is unavailable.
+
+3. System Features (Functional Requirements)
+
+3.1 Module: Ambulance Vitals & Symptom Capture
+
+ID
+
+Requirement
+
+Priority
+
+FR-1.1
+
+The system shall auto-capture heart rate, SpO2, blood pressure, and temperature from BLE-paired monitoring devices where available.
+
+High
+
+FR-1.2
+
+The system shall provide a manual numeric-entry fallback for all vitals fields when hardware is unavailable or fails to pair.
+
+High
+
+FR-1.3
+
+The system shall accept voice input for symptom description only (not numeric vitals) and convert it to text via speech-to-text.
+
+High
+
+FR-1.4
+
+The system shall timestamp every vitals reading and store the capturing method (device / manual) against each record.
+
+Medium
+
+FR-1.5
+
+The system shall function fully offline, buffering all captured data locally until connectivity is restored.
+
+High
+
+3.2 Module: AI-Assisted Triage Engine
+
+ID
+
+Requirement
+
+Priority
+
+FR-2.1
+
+The system shall compute a deterministic urgency level (ESI 1–5) using a rules engine based on captured vitals thresholds.
+
+High
+
+FR-2.2
+
+The system shall use an LLM to parse free-text/voice symptom descriptions into structured clinical flags (e.g., cardiac_flag, trauma_flag).
+
+High
+
+FR-2.3
+
+The AI-derived symptom flags shall feed into, but never override, the deterministic ESI rules engine's final score.
+
+High
+
+FR-2.4
+
+The system shall require EMT confirmation of the suggested urgency tag before dispatch is triggered.
+
+High
+
+FR-2.5
+
+The system shall log the rationale (which vitals/symptoms triggered the score) for every urgency classification, for auditability.
+
+Medium
+
+3.3 Module: Hospital Matching & Dispatch Orchestration
+
+ID
+
+Requirement
+
+Priority
+
+FR-3.1
+
+The system shall identify hospitals within a configurable radius of the ambulance's live location using Google Maps APIs.
+
+High
+
+FR-3.2
+
+The system shall filter matched hospitals by required specialty (cardiac, neuro, ortho, general, trauma, etc.) derived from triage output.
+
+High
+
+FR-3.3
+
+The system shall broadcast dispatch requests to all specialty-matched, in-radius hospitals in parallel (not sequentially).
+
+High
+
+FR-3.4
+
+The system shall accept the first qualifying hospital confirmation and automatically send a stand-down notice to all other notified hospitals.
+
+High
+
+FR-3.5
+
+If no hospital confirms within a configurable timeout, the system shall automatically widen the search radius and re-broadcast.
+
+High
+
+FR-3.6
+
+The system shall rank simultaneous multi-hospital confirmations by specialty match, distance, and reported capacity, and auto-select the best fit.
+
+Medium
+
+FR-3.7
+
+The system shall expose hospital-network operations (lookup, capacity check, request, response) as discrete callable tools via an MCP server, orchestrated by an AI dispatch agent.
+
+Medium
+
+3.4 Module: Hospital Dashboard
+
+ID
+
+Requirement
+
+Priority
+
+FR-4.1
+
+The dashboard shall display incoming dispatch requests in real time via WebSocket/push notification.
+
+High
+
+FR-4.2
+
+The dashboard shall display patient vitals, symptoms, urgency score, and live ETA for each active request.
+
+High
+
+FR-4.3
+
+The dashboard shall allow duty staff to confirm readiness to receive the patient (not "reject" — framed as best-fit confirmation).
+
+High
+
+FR-4.4
+
+The dashboard shall show a live-updating status once the case is assigned elsewhere (stand-down notice).
+
+Medium
+
+FR-4.5
+
+The dashboard shall maintain a toggle-able capacity/specialty-readiness status per department (MVP simulation of bed availability).
+
+Medium
+
+4. External Interface Requirements
+
+4.1 User Interfaces
+
+Ambulance App: large-touch-target UI, minimal-typing workflow, one-handed usable, high color-contrast urgency indicators.
+
+Hospital Dashboard: web-based, real-time updating list/card view of active and past requests.
+
+4.2 Hardware Interfaces
+
+BLE pulse oximeter, BP cuff, and (optional) ECG patch pairing via standard BLE GATT profiles.
+
+4.3 Software Interfaces
+
+Google Maps Directions API, Distance Matrix API, Places API — routing, ETA, hospital geolocation.
+
+Speech-to-text engine (e.g., Whisper) — symptom voice capture.
+
+LLM API (Claude) — symptom structuring and dispatch-agent orchestration via MCP tools.
+
+4.4 Communication Interfaces
+
+HTTPS/REST for standard requests; WebSocket for live dashboard push; SMS gateway as offline fallback for critical alerts.
+
+5. Non-Functional Requirements
+
+5.1 Performance
+
+Dispatch broadcast to all matched hospitals shall complete within 3 seconds of triage confirmation.
+
+Hospital dashboard shall reflect a new request within 2 seconds of broadcast (WebSocket push, not polling).
+
+5.2 Reliability & Availability
+
+The ambulance app shall retain full vitals-capture and local-buffer functionality with zero network connectivity.
+
+No single hospital's non-response shall block dispatch to other candidate hospitals (parallel broadcast, not sequential).
+
+5.3 Safety & Liability
+
+Final urgency classification requires human confirmation; the system shall never auto-dispatch on AI classification alone without an EMT-confirmed step.
+
+All triage decisions shall be logged with the contributing rule/vitals for post-incident audit and legal traceability.
+
+5.4 Security & Privacy
+
+Patient vitals and symptom data shall be encrypted in transit (TLS) and at rest.
+
+Access to hospital dashboards shall be role-based and authenticated per hospital/department.
+
+5.5 Scalability
+
+The hospital directory and dispatch engine shall support horizontal scaling to accommodate city-wide multi-ambulance, multi-hospital load.
+
+5.6 Usability
+
+Ambulance-side data entry shall require no more than 3 taps for a manual vitals fallback entry per field, given the low-training-assumption user base.
+
+6. System Architecture
+
+6.1 High-Level Architecture
+
+The system is organized into four layers:
+
+Ambulance Layer — BLE vitals capture, voice symptom capture, offline-first local buffer (SQLite), syncs to backend when connected.
+
+Triage Layer — ESI-based deterministic rules engine + LLM-assisted symptom structuring; requires EMT confirmation before proceeding.
+
+Dispatch Orchestration Layer — AI agent using MCP-exposed hospital-network tools (lookup, specialty filter, capacity check, broadcast request, collect responses, stand-down) to run the parallel broadcast-and-select workflow.
+
+Hospital Layer — real-time dashboard (WebSocket-driven) showing incoming requests, vitals, ETA, and readiness-confirmation controls; backed by a (simulated, MVP-stage) capacity database.
+
+6.2 Data Flow Summary
+
+Vitals & symptoms captured in ambulance → local buffer → synced to backend → ESI rules engine + LLM symptom parser → EMT-confirmed urgency tag → MCP dispatch agent identifies specialty-matched in-radius hospitals → parallel broadcast → first qualifying confirmation selected → stand-down sent to remaining hospitals → selected hospital dashboard receives full patient record and live ETA.
+
+7. Data Requirements (Core Entities)
+
+Entity
+
+Key Fields
+
+Patient Case
+
+case_id, ambulance_id, timestamps, vitals[], symptoms_text, structured_symptoms, urgency_score, urgency_rationale, status
+
+Vitals Reading
+
+reading_id, case_id, heart_rate, spo2, bp_systolic, bp_diastolic, temperature, capture_method, timestamp
+
+Hospital
+
+hospital_id, name, location(lat/lng), specialties[], capacity_status, contact_endpoint
+
+Dispatch Request
+
+request_id, case_id, hospital_id, sent_at, response_status, response_at, eta_minutes
+
+Audit Log
+
+log_id, case_id, event_type, actor, payload_snapshot, timestamp
+
+8. Primary Use Case Scenarios
+
+8.1 Use Case: Critical Cardiac Case Dispatch
+
+Actor: EMT in ambulance.
+
+Trigger: Patient shows chest pain, abnormal vitals detected via BLE monitor.
+
+Flow: Vitals auto-captured → EMT adds voice note "clutching chest, sweating" → LLM flags cardiac_flag → ESI engine scores ESI-2 → EMT confirms → dispatch agent broadcasts to all cardiac-specialty hospitals within radius → nearest confirming hospital selected → others stood down → hospital dashboard receives full case data and live ETA.
+
+8.2 Use Case: No Response Within Timeout
+
+Trigger: No matched hospital confirms within the configured timeout window.
+
+Flow: System automatically widens search radius and re-broadcasts to the next tier of specialty-matched hospitals, without waiting for manual re-trigger.
+
+8.3 Use Case: Connectivity Loss Mid-Transit
+
+Trigger: Ambulance enters a network dead zone after vitals capture has begun.
+
+Flow: All data is buffered locally; on reconnect, the system auto-syncs; if urgency is critical and connectivity does not return in time, an SMS fallback alert is sent with minimal case data to the nearest pre-registered hospital.
+
+9. Proposed Technology Stack
+
+Layer
+
+Technology
+
+Ambulance App
+
+React Native; SQLite (offline buffer); Web Bluetooth / React Native BLE PLX
+
+Voice-to-Text
+
+Whisper API (noise-tolerant symptom capture)
+
+Triage Engine
+
+Python rules engine (ESI-based) + Claude API for symptom structuring
+
+Dispatch Orchestration
+
+MCP server exposing hospital-network tools; Claude-based AI agent as orchestrator
+
+Hospital Dashboard
+
+React + Tailwind CSS; WebSocket (Socket.io) for live push
+
+Backend / API
+
+FastAPI (Python)
+
+Database
+
+PostgreSQL (core data); Redis (live dispatch/request state)
+
+Routing / Location
+
+Google Maps Directions API, Distance Matrix API, Places API
+
+Notifications
+
+Firebase Cloud Messaging (push); SMS gateway (offline fallback)
+
+End of Document.

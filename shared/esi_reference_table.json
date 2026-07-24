@@ -1,0 +1,54 @@
+{
+  "_notes": "Simplified, explainable ESI-inspired thresholds for MVP. Real ESI is a clinician-applied decision tree; this encodes the vitals/symptom boundaries a rules engine can check deterministically. Every field here is directly traceable to a WHY in the rationale output.",
+
+  "vitals_thresholds": {
+    "heart_rate_bpm": {
+      "esi1_critical": { "below": 40, "above": 150 },
+      "esi2_high_risk": { "below": 50, "above": 130 },
+      "esi3_abnormal":  { "below": 60, "above": 110 },
+      "normal_range":   { "low": 60, "high": 100 }
+    },
+    "spo2_percent": {
+      "esi1_critical": { "below": 85 },
+      "esi2_high_risk": { "below": 90 },
+      "esi3_abnormal":  { "below": 94 },
+      "normal_range":   { "low": 95, "high": 100 }
+    },
+    "bp_systolic_mmhg": {
+      "esi1_critical": { "below": 70, "above": 220 },
+      "esi2_high_risk": { "below": 85, "above": 200 },
+      "esi3_abnormal":  { "below": 95, "above": 160 },
+      "normal_range":   { "low": 100, "high": 130 }
+    },
+    "temperature_celsius": {
+      "esi2_high_risk": { "above": 40.0 },
+      "esi3_abnormal":  { "below": 35.5, "above": 38.5 },
+      "normal_range":   { "low": 36.1, "high": 37.5 }
+    }
+  },
+
+  "symptom_flags": {
+    "unresponsive_flag":        { "forces_esi": 1, "specialty": "trauma" },
+    "not_breathing_flag":       { "forces_esi": 1, "specialty": "trauma" },
+    "cardiac_arrest_flag":      { "forces_esi": 1, "specialty": "cardiac" },
+    "severe_bleeding_flag":     { "forces_esi": 1, "specialty": "trauma" },
+    "chest_pain_flag":          { "min_esi": 2, "specialty": "cardiac" },
+    "stroke_symptoms_flag":     { "min_esi": 2, "specialty": "neuro" },
+    "breathing_difficulty_flag":{ "min_esi": 2, "specialty": "pulmonology" },
+    "major_trauma_flag":        { "min_esi": 2, "specialty": "trauma" },
+    "fracture_flag":            { "min_esi": 3, "specialty": "orthopedic" },
+    "moderate_bleeding_flag":   { "min_esi": 3, "specialty": "trauma" },
+    "fever_infection_flag":     { "min_esi": 3, "specialty": "general" },
+    "mild_pain_flag":           { "min_esi": 4, "specialty": "general" }
+  },
+
+  "esi_levels": {
+    "1": { "label": "Resuscitation", "meaning": "Immediate life-saving intervention required", "target_hospital_response_seconds": 30 },
+    "2": { "label": "Emergent",      "meaning": "High-risk situation, cannot safely wait",       "target_hospital_response_seconds": 60 },
+    "3": { "label": "Urgent",        "meaning": "Stable but needs multiple resources",            "target_hospital_response_seconds": 120 },
+    "4": { "label": "Less Urgent",   "meaning": "Needs one resource",                             "target_hospital_response_seconds": 180 },
+    "5": { "label": "Non-Urgent",    "meaning": "No acute resources needed",                      "target_hospital_response_seconds": 300 }
+  },
+
+  "specialty_default": "general"
+}

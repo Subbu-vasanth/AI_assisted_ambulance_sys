@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Ambulance Capture</title>
+<style>
+  :root {
+    --bg: #12161B; --panel: #1A1F26; --panel-raised: #212832; --line: #2A323D;
+    --text: #E8EDF2; --text-dim: #8A97A6; --text-faint: #5A6472; --accent: #4CC3C9;
+    --esi1: #E5484D; --esi2: #F5A623; --esi3: #E8C547; --esi4: #4CC3C9; --esi5: #6FCF97;
+    --danger: #E5484D;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    max-width: 460px; margin: 0 auto; min-height: 100vh; padding-bottom: 40px;
+  }
+  .mono { font-family: 'SF Mono', Consolas, Menlo, monospace; }
+
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; }
+  header h1 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; }
+  header .sub { font-size: 12px; color: var(--text-dim); }
+
+  section { padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 12px; font-weight: 600; }
+
+  .vitals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .vital-field label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 5px; }
+  .vital-field input {
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line);
+    color: var(--text); font-size: 20px; padding: 12px; border-radius: 8px; font-family: inherit;
+  }
+  .vital-field input.mono { font-family: 'SF Mono', Consolas, monospace; }
+  .vital-field.abnormal input { border-color: var(--esi2); color: var(--esi2); }
+  .vital-field.critical input { border-color: var(--esi1); color: var(--esi1); }
+
+  .ble-btn {
+    width: 100%; margin-top: 14px; padding: 12px; border-radius: 8px;
+    background: var(--panel-raised); border: 1px dashed var(--line);
+    color: var(--text-dim); font-size: 13px; cursor: pointer;
+  }
+  .ble-btn:active { background: var(--accent); color: #06222A; border-color: var(--accent); }
+
+  textarea {
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line);
+    color: var(--text); font-size: 15px; padding: 12px; border-radius: 8px;
+    font-family: inherit; min-height: 70px; resize: vertical;
+  }
+  .voice-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; margin-top: 10px; padding: 14px; border-radius: 8px;
+    background: var(--panel-raised); border: 1px solid var(--line);
+    color: var(--text); font-size: 14px; cursor: pointer;
+  }
+  .voice-btn.recording { background: var(--esi1); color: white; border-color: var(--esi1); animation: pulseRec 1s infinite; }
+  @keyframes pulseRec { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+  .flags-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .flag-chip {
+    padding: 9px 13px; border-radius: 20px; font-size: 13px;
+    background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim);
+    cursor: pointer; user-select: none;
+  }
+  .flag-chip.active { background: rgba(76,195,201,0.15); border-color: var(--accent); color: var(--accent); }
+
+  .primary-btn {
+    width: 100%; padding: 16px; border-radius: 10px; border: none;
+    background: var(--accent); color: #06222A; font-size: 15px; font-weight: 700;
+    cursor: pointer; margin-top: 4px;
+  }
+  .primary-btn:disabled { background: var(--panel-raised); color: var(--text-faint); }
+  .secondary-btn {
+    width: 100%; padding: 14px; border-radius: 10px; margin-top: 10px;
+    background: transparent; border: 1px solid var(--line); color: var(--text-dim); font-size: 14px;
+  }
+
+  #triageResult { display: none; }
+  .esi-banner {
+    padding: 18px; border-radius: 10px; margin-bottom: 14px; text-align: center;
+  }
+  .esi-banner[data-esi="1"], .esi-banner[data-esi="2"] { background: rgba(229,72,77,0.12); border: 1px solid var(--esi1); }
+  .esi-banner[data-esi="3"] { background: rgba(232,197,71,0.10); border: 1px solid var(--esi3); }
+  .esi-banner[data-esi="4"], .esi-banner[data-esi="5"] { background: rgba(111,207,151,0.10); border: 1px solid var(--esi5); }
+  .esi-banner .level { font-size: 28px; font-weight: 800; }
+  .esi-banner .label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+  .esi-banner .specialty { font-size: 12px; margin-top: 8px; color: var(--text-dim); }
+  .rationale-list { font-size: 12px; color: var(--text-faint); line-height: 1.8; padding-left: 4px; }
+
+  #dispatchResult { display: none; text-align: center; padding: 10px 0; }
+  #dispatchResult .check { font-size: 40px; color: var(--esi5); }
+  #dispatchResult .hlist { font-size: 13px; color: var(--text-dim); margin-top: 10px; line-height: 1.8; }
+
+  .status-line { font-size: 12px; color: var(--text-faint); text-align: center; padding: 12px 20px; }
+</style>
+</head>
+<body>
+
+<header style="display: flex; justify-content: space-between; align-items: center; padding: 18px 20px 14px; border-bottom: 1px solid var(--line);">
+  <div>
+    <h1 style="font-size: 15px; margin: 0 0 2px; display: flex; align-items: center;"><span class="dot"></span>AMBULANCE CAPTURE</h1>
+    <div class="sub">AMB-108 · EMT: on duty</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 6px; background: var(--panel-raised); border: 1px solid var(--line); padding: 5px 8px; border-radius: 6px; font-size: 11px;">
+    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 600; color: var(--text-dim);">
+      <input type="checkbox" id="offlineSimToggle" onchange="toggleOfflineMode(this.checked)" style="cursor: pointer; margin: 0;">
+      Simulate Offline
+    </label>
+  </div>
+</header>
+
+<div id="captureForm">
+  <section>
+    <div class="section-label">Vitals</div>
+    <div class="vitals-grid">
+      <div class="vital-field" id="field-hr">
+        <label>Heart rate (bpm)</label>
+        <input type="number" id="hr" class="mono" placeholder="—" inputmode="decimal">
+      </div>
+      <div class="vital-field" id="field-spo2">
+        <label>SpO2 (%)</label>
+        <input type="number" id="spo2" class="mono" placeholder="—" inputmode="decimal">
+      </div>
+      <div class="vital-field" id="field-bp">
+        <label>BP systolic (mmHg)</label>
+        <input type="number" id="bp" class="mono" placeholder="—" inputmode="decimal">
+      </div>
+      <div class="vital-field" id="field-temp">
+        <label>Temperature (°C)</label>
+        <input type="number" id="temp" class="mono" placeholder="—" inputmode="decimal" step="0.1">
+      </div>
+    </div>
+    <button class="ble-btn" onclick="autoFillFromDevice()">⎋ Pull from paired monitor (BLE)</button>
+  </section>
+
+  <section>
+    <div class="section-label">Symptoms</div>
+    <textarea id="symptomText" placeholder="Describe what you see — or tap the mic and speak"></textarea>
+    <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎙 Tap to record symptoms</button>
+  </section>
+
+  <section>
+    <div class="section-label">Quick flags (tap all that apply)</div>
+    <div class="flags-grid" id="flagsGrid"></div>
+  </section>
+
+  <section style="border-bottom: none;">
+    <button class="primary-btn" onclick="runTriage()">Run AI Triage Suggestion →</button>
+  </section>
+</div>
+
+<div id="triageResult">
+  <section style="border-bottom: none;">
+    <div class="esi-banner" id="esiBanner">
+      <div class="level" id="esiLevel"></div>
+      <div class="label" id="esiLabelText"></div>
+      <div class="specialty" id="esiSpecialty"></div>
+    </div>
+    <div class="section-label">Why (rationale)</div>
+    <div class="rationale-list" id="rationaleList"></div>
+  </section>
+  <section style="border-bottom: none;">
+    <button class="primary-btn" onclick="confirmAndDispatch()">✓ EMT Confirm — Dispatch Now</button>
+    <button class="secondary-btn" onclick="backToForm()">← Edit vitals / symptoms</button>
+  </section>
+</div>
+
+<div id="dispatchResult">
+  <section style="border-bottom: none; text-align: center;">
+    <div class="check" id="dispatchCheck">✓</div>
+    <div style="font-size:15px; font-weight:600; margin-top:8px;" id="dispatchTitle">Broadcast sent</div>
+    <div class="hlist" id="hospitalList"></div>
+
+    <!-- SMS Fallback Container (FR-8.3) -->
+    <div id="smsFallbackContainer" style="display: none; margin-top: 20px; background: rgba(245,166,35,0.12); border: 1px solid var(--esi2); padding: 14px; border-radius: 8px; text-align: left;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--esi2); letter-spacing: 0.05em; margin-bottom: 8px;">
+        ⚠️ Offline SMS Fallback Alert (FR-8.3)
+      </div>
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.4;">
+        Critical patient detected. Connectivity unavailable. Send this draft to emergency services:
+      </div>
+      <textarea id="smsTextarea" readonly style="font-family: 'SF Mono', monospace; font-size: 12px; height: 75px; min-height: 75px; background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 8px; box-sizing: border-box; resize: none; width: 100%;"></textarea>
+      <div style="font-size: 11px; color: var(--text-faint); margin-top: 6px;">
+        Auto-syncing to backend will continue in background.
+      </div>
+    </div>
+
+    <button class="secondary-btn" onclick="location.reload()" style="margin-top: 20px;">New case</button>
+  </section>
+</div>
+
+<div class="status-line" id="apiStatus">connecting to backend…</div>
+
+<script>
+// Same-origin now that this file is served BY the backend (via /ambulance mount).
+const API = window.location.origin;
+
+const FLAGS = [
+  { id: 'cardiac_arrest_flag', label: 'Cardiac arrest' },
+  { id: 'chest_pain_flag', label: 'Chest pain' },
+  { id: 'stroke_symptoms_flag', label: 'Stroke signs' },
+  { id: 'breathing_difficulty_flag', label: 'Breathing difficulty' },
+  { id: 'major_trauma_flag', label: 'Major trauma' },
+  { id: 'moderate_bleeding_flag', label: 'Bleeding' },
+  { id: 'fracture_flag', label: 'Fracture' },
+  { id: 'fever_infection_flag', label: 'Fever / infection' },
+  { id: 'mild_pain_flag', label: 'Mild pain only' },
+];
+const activeFlags = new Set();
+
+function renderFlags() {
+  const grid = document.getElementById('flagsGrid');
+  grid.innerHTML = FLAGS.map(f =>
+    `<div class="flag-chip" id="chip-${f.id}" onclick="toggleFlag('${f.id}')">${f.label}</div>`
+  ).join('');
+}
+function toggleFlag(id) {
+  const chip = document.getElementById(`chip-${id}`);
+  if (activeFlags.has(id)) { activeFlags.delete(id); chip.classList.remove('active'); }
+  else { activeFlags.add(id); chip.classList.add('active'); }
+}
+renderFlags();
+
+// --- BLE simulation: fills vitals as if pulled from a paired monitor (FR-1.1) ---
+function autoFillFromDevice() {
+  document.getElementById('hr').value = (70 + Math.random() * 60).toFixed(0);
+  document.getElementById('spo2').value = (92 + Math.random() * 7).toFixed(0);
+  document.getElementById('bp').value = (95 + Math.random() * 35).toFixed(0);
+  document.getElementById('temp').value = (36.4 + Math.random() * 1.4).toFixed(1);
+  flagAbnormalFields();
+}
+function flagAbnormalFields() {
+  const hr = parseFloat(document.getElementById('hr').value);
+  const spo2 = parseFloat(document.getElementById('spo2').value);
+  document.getElementById('field-hr').className = 'vital-field' + (hr > 130 ? ' critical' : hr > 110 ? ' abnormal' : '');
+  document.getElementById('field-spo2').className = 'vital-field' + (spo2 < 90 ? ' critical' : spo2 < 94 ? ' abnormal' : '');
+}
+['hr','spo2'].forEach(id => document.getElementById(id).addEventListener('input', flagAbnormalFields));
+
+// --- Voice input (FR-1.3): record-then-send to Whisper for noise-tolerant
+// transcription. Symptoms only, never numeric vitals. ---
+let mediaRecorder = null;
+let audioChunks = [];
+let recognizing = false;
+
+async function toggleVoice() {
+  const btn = document.getElementById('voiceBtn');
+  if (recognizing) {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+    mediaRecorder.onstart = () => {
+      recognizing = true;
+      btn.classList.add('recording');
+      btn.textContent = '● Recording — tap to stop';
+    };
+    mediaRecorder.onstop = async () => {
+      recognizing = false;
+      btn.classList.add('recording');
+      btn.textContent = '⏳ Transcribing…';
+      stream.getTracks().forEach(t => t.stop());
+
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', blob, 'symptom.webm');
+
+      try {
+        const res = await fetch(`${API}/api/transcribe`, { method: 'POST', body: formData });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Transcription failed');
+        }
+        const data = await res.json();
+        const ta = document.getElementById('symptomText');
+        ta.value = (ta.value ? ta.value + ' ' : '') + data.text;
+      } catch (e) {
+        alert(`Voice transcription unavailable: ${e.message}\nType symptoms manually instead.`);
+      } finally {
+        btn.classList.remove('recording');
+        btn.textContent = '🎙 Tap to record symptoms';
+      }
+    };
+    mediaRecorder.start();
+  } catch (e) {
+    alert('Microphone access denied or unavailable — type symptoms manually.');
+  }
+}
+
+function collectVitals() {
+  return {
+    heart_rate_bpm: parseFloat(document.getElementById('hr').value) || 0,
+    spo2_percent: parseFloat(document.getElementById('spo2').value) || 0,
+    bp_systolic_mmhg: parseFloat(document.getElementById('bp').value) || 0,
+    temperature_celsius: parseFloat(document.getElementById('temp').value) || 0,
+  };
+}
+function collectFlags() {
+  const flags = {};
+  activeFlags.forEach(f => flags[f] = true);
+  return flags;
+}
+
+let lastCasePayload = null;
+let isOfflineSimulated = false;
+let isSyncing = false;
+
+function toggleOfflineMode(enabled) {
+  isOfflineSimulated = enabled;
+  updateStatusLine();
+}
+
+function updateStatusLine() {
+  const statusEl = document.getElementById('apiStatus');
+  const offlineCases = JSON.parse(localStorage.getItem('offline_cases') || '[]');
+  const countMsg = offlineCases.length > 0 ? ` (${offlineCases.length} pending sync)` : '';
+
+  if (isOfflineSimulated) {
+    statusEl.innerHTML = `<span style="color: var(--esi2); font-weight: 600;">Offline Mode (Simulated)${countMsg}</span>`;
+  } else {
+    fetch(`${API}/`).then(r => r.json()).then(() => {
+      statusEl.innerHTML = `<span style="color: var(--esi5); font-weight: 600;">connected to dispatch backend${countMsg}</span>`;
+      syncOfflineCases();
+    }).catch(() => {
+      statusEl.innerHTML = `<span style="color: var(--esi1); font-weight: 600;">⚠ backend unreachable — local buffering active${countMsg}</span>`;
+    });
+  }
+}
+
+function clientSideTriage(vitals, flags) {
+  const rationale = [];
+  let esi = 5;
+  let specialty = 'general';
+
+  if (flags.cardiac_arrest_flag) {
+    esi = 1; specialty = 'cardiac';
+    rationale.push('Symptom flag: Cardiac arrest (ESI-1)');
+  } else if (flags.chest_pain_flag) {
+    esi = 2; specialty = 'cardiac';
+    rationale.push('Symptom flag: Chest pain (ESI-2)');
+  } else if (flags.stroke_symptoms_flag) {
+    esi = 2; specialty = 'neuro';
+    rationale.push('Symptom flag: Stroke signs (ESI-2)');
+  } else if (flags.breathing_difficulty_flag) {
+    esi = 2; specialty = 'pulmonology';
+    rationale.push('Symptom flag: Breathing difficulty (ESI-2)');
+  } else if (flags.major_trauma_flag) {
+    esi = 2; specialty = 'trauma';
+    rationale.push('Symptom flag: Major trauma (ESI-2)');
+  } else if (flags.moderate_bleeding_flag) {
+    esi = 3; specialty = 'trauma';
+    rationale.push('Symptom flag: Bleeding (ESI-3)');
+  } else if (flags.fracture_flag) {
+    esi = 4; specialty = 'orthopedic';
+    rationale.push('Symptom flag: Fracture (ESI-4)');
+  } else if (flags.fever_infection_flag) {
+    esi = 4; specialty = 'general';
+    rationale.push('Symptom flag: Fever/infection (ESI-4)');
+  }
+
+  if (vitals.heart_rate_bpm > 140 || vitals.heart_rate_bpm < 40) {
+    if (esi > 2) { esi = 2; rationale.push(`Heart rate (${vitals.heart_rate_bpm}) is critical (ESI-2)`); }
+  } else if (vitals.heart_rate_bpm > 110 || vitals.heart_rate_bpm < 50) {
+    if (esi > 3) { esi = 3; rationale.push(`Heart rate (${vitals.heart_rate_bpm}) is abnormal (ESI-3)`); }
+  }
+
+  if (vitals.spo2_percent < 88) {
+    if (esi > 1) { esi = 1; rationale.push(`SpO2 (${vitals.spo2_percent}%) is critical (ESI-1)`); }
+  } else if (vitals.spo2_percent < 92) {
+    if (esi > 2) { esi = 2; rationale.push(`SpO2 (${vitals.spo2_percent}%) is high-risk (ESI-2)`); }
+  } else if (vitals.spo2_percent < 95) {
+    if (esi > 3) { esi = 3; rationale.push(`SpO2 (${vitals.spo2_percent}%) is abnormal (ESI-3)`); }
+  }
+
+  if (vitals.bp_systolic_mmhg > 200 || vitals.bp_systolic_mmhg < 80) {
+    if (esi > 2) { esi = 2; rationale.push(`Systolic BP (${vitals.bp_systolic_mmhg}) is critical (ESI-2)`); }
+  } else if (vitals.bp_systolic_mmhg > 160 || vitals.bp_systolic_mmhg < 90) {
+    if (esi > 3) { esi = 3; rationale.push(`Systolic BP (${vitals.bp_systolic_mmhg}) is abnormal (ESI-3)`); }
+  }
+
+  if (vitals.temperature_celsius > 39.0 || vitals.temperature_celsius < 35.0) {
+    if (esi > 3) { esi = 3; rationale.push(`Temperature (${vitals.temperature_celsius}°C) is abnormal (ESI-3)`); }
+  }
+
+  const meanings = {
+    1: 'Immediate life-saving intervention required',
+    2: 'High risk / Emergent situation',
+    3: 'Urgent / Two or more resources needed',
+    4: 'Less urgent / One resource needed',
+    5: 'Non-urgent / No resources needed'
+  };
+
+  const labels = {
+    1: 'Immediate', 2: 'Emergent', 3: 'Urgent', 4: 'Less Urgent', 5: 'Non-Urgent'
+  };
+
+  return {
+    esi_level: esi,
+    label: labels[esi],
+    meaning: meanings[esi],
+    specialty: specialty,
+    rationale: rationale.length ? rationale : ['All parameters fall within normal ranges.']
+  };
+}
+
+async function runTriage() {
+  const vitals = collectVitals();
+  const payload = {
+    ambulance_id: 'AMB-108',
+    vitals,
+    symptom_text: document.getElementById('symptomText').value || '(no symptom text entered)',
+    symptom_flags: collectFlags(),
+    location: { lat: 11.0050, lng: 76.9610, area: 'RS Puram' },
+  };
+  lastCasePayload = payload;
+
+  if (isOfflineSimulated) {
+    const offlineTriage = clientSideTriage(vitals, payload.symptom_flags);
+    offlineTriage.rationale.unshift('[OFFLINE LOCAL PREVIEW]');
+    showTriage(offlineTriage);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/triage-preview`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    showTriage(data.triage);
+  } catch (err) {
+    console.warn("Backend down, running client-side local triage fallback", err);
+    const offlineTriage = clientSideTriage(vitals, payload.symptom_flags);
+    offlineTriage.rationale.unshift('[BACKEND UNREACHABLE - LOCAL TRIAGE FALLBACK]');
+    showTriage(offlineTriage);
+  }
+}
+
+function showTriage(triage) {
+  document.getElementById('captureForm').style.display = 'none';
+  document.getElementById('triageResult').style.display = 'block';
+  document.getElementById('esiBanner').dataset.esi = triage.esi_level;
+  document.getElementById('esiLevel').textContent = `ESI-${triage.esi_level}`;
+  document.getElementById('esiLabelText').textContent = `${triage.label} — ${triage.meaning}`;
+  document.getElementById('esiSpecialty').textContent = `Specialty required: ${triage.specialty}`;
+  document.getElementById('rationaleList').innerHTML =
+    triage.rationale.map(r => `· ${r}`).join('<br>');
+}
+
+function backToForm() {
+  document.getElementById('captureForm').style.display = 'block';
+  document.getElementById('triageResult').style.display = 'none';
+}
+
+function bufferCaseOffline(payload, ESI) {
+  const caseId = `CASE-OFFLINE-${Date.now()}`;
+  payload.case_id = caseId;
+  payload.esi_level = ESI;
+
+  const offlineCases = JSON.parse(localStorage.getItem('offline_cases') || '[]');
+  offlineCases.push(payload);
+  localStorage.setItem('offline_cases', JSON.stringify(offlineCases));
+
+  document.getElementById('triageResult').style.display = 'none';
+  document.getElementById('dispatchResult').style.display = 'block';
+
+  document.getElementById('dispatchCheck').textContent = '⚠️';
+  document.getElementById('dispatchCheck').style.color = 'var(--esi2)';
+  document.getElementById('dispatchTitle').textContent = 'Case Saved Locally (Offline)';
+  document.getElementById('hospitalList').innerHTML = `Case ${caseId} buffered in offline queue.`;
+
+  if (ESI <= 2) {
+    const smsText = `EMERGENCY ALERT: AMB-108 ESI-${ESI}. Vitals: HR ${payload.vitals.heart_rate_bpm}, SpO2 ${payload.vitals.spo2_percent}%, BP ${payload.vitals.bp_systolic_mmhg}. Location: RS Puram. Symptoms: ${payload.symptom_text.slice(0, 50)}...`;
+    document.getElementById('smsTextarea').value = smsText;
+    document.getElementById('smsFallbackContainer').style.display = 'block';
+  } else {
+    document.getElementById('smsFallbackContainer').style.display = 'none';
+  }
+  updateStatusLine();
+}
+
+async function confirmAndDispatch() {
+  const ESI = parseInt(document.getElementById('esiBanner').dataset.esi) || 5;
+
+  if (isOfflineSimulated) {
+    bufferCaseOffline(lastCasePayload, ESI);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/cases`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(lastCasePayload)
+    });
+    const data = await res.json();
+    document.getElementById('triageResult').style.display = 'none';
+    document.getElementById('dispatchResult').style.display = 'block';
+    document.getElementById('dispatchCheck').textContent = '✓';
+    document.getElementById('dispatchCheck').style.color = 'var(--esi5)';
+    document.getElementById('dispatchTitle').textContent = 'Broadcast sent';
+    document.getElementById('smsFallbackContainer').style.display = 'none';
+    document.getElementById('hospitalList').innerHTML =
+      `Case ${data.case_id}<br>` +
+      data.broadcast_to.map(h => `→ ${h.hospital_name}`).join('<br>');
+  } catch (err) {
+    console.warn("Failed to dispatch to backend, buffering offline", err);
+    bufferCaseOffline(lastCasePayload, ESI);
+  }
+}
+
+async function syncOfflineCases() {
+  if (isOfflineSimulated || isSyncing) return;
+  const offlineCases = JSON.parse(localStorage.getItem('offline_cases') || '[]');
+  if (offlineCases.length === 0) return;
+
+  isSyncing = true;
+  const remaining = [];
+  for (const caseData of offlineCases) {
+    try {
+      const res = await fetch(`${API}/api/cases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(caseData)
+      });
+      if (res.ok) {
+        console.log(`Successfully synced case ${caseData.case_id}`);
+      } else {
+        remaining.push(caseData);
+      }
+    } catch (e) {
+      console.error(`Error syncing case ${caseData.case_id}:`, e);
+      remaining.push(caseData);
+    }
+  }
+
+  localStorage.setItem('offline_cases', JSON.stringify(remaining));
+  isSyncing = false;
+  updateStatusLine();
+}
+
+// Initial status check & set sync interval
+updateStatusLine();
+setInterval(updateStatusLine, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+mcp[cli]>=1.28.1
+pydantic>=2.0
+anyio
+httpx
+starlette
+sse-starlette
+httpx-sse
+jsonschema
+anthropic>=0.40
+openai>=1.50   # also used for Groq's OpenAI-compatible Whisper endpoint
+python-dotenv>=1.0

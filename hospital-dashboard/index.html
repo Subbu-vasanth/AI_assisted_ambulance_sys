@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hospital Dispatch Console</title>
+<style>
+  :root {
+    --bg: #12161B;
+    --panel: #1A1F26;
+    --panel-raised: #212832;
+    --line: #2A323D;
+    --text: #E8EDF2;
+    --text-dim: #8A97A6;
+    --text-faint: #5A6472;
+    --accent: #4CC3C9;
+
+    --esi1: #E5484D;
+    --esi1-bg: rgba(229,72,77,0.12);
+    --esi2: #F5A623;
+    --esi2-bg: rgba(245,166,35,0.10);
+    --esi3: #E8C547;
+    --esi3-bg: rgba(232,197,71,0.08);
+    --esi4: #4CC3C9;
+    --esi4-bg: rgba(76,195,201,0.08);
+    --esi5: #6FCF97;
+    --esi5-bg: rgba(111,207,151,0.08);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+  }
+  .mono { font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; }
+
+  header {
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .brand h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
+  .brand .sub { color: var(--text-dim); font-size: 12px; }
+
+  .controls { display: flex; align-items: center; gap: 12px; }
+  select, button {
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  select:hover, button:hover { border-color: var(--accent); }
+  .conn-status { font-size: 12px; display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
+  .conn-dot.live { background: var(--esi5); box-shadow: 0 0 6px var(--esi5); }
+
+  main { padding: 24px 28px; max-width: 980px; margin: 0 auto; }
+
+  .sim-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .sim-panel .label { color: var(--text-dim); font-size: 12px; margin-right: 4px; }
+  .sim-panel button { font-size: 12px; padding: 6px 10px; }
+
+  .empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-faint);
+  }
+  .empty .glyph { font-size: 34px; margin-bottom: 12px; opacity: 0.5; }
+
+  .card {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px 18px 24px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 5px;
+  }
+  .card[data-esi="1"]::before, .card[data-esi="2"]::before { animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .card[data-esi="1"] { border-color: var(--esi1); background: linear-gradient(90deg, var(--esi1-bg), var(--panel) 60%); }
+  .card[data-esi="1"]::before { background: var(--esi1); }
+  .card[data-esi="2"] { border-color: var(--esi2); background: linear-gradient(90deg, var(--esi2-bg), var(--panel) 60%); }
+  .card[data-esi="2"]::before { background: var(--esi2); }
+  .card[data-esi="3"]::before { background: var(--esi3); }
+  .card[data-esi="4"]::before { background: var(--esi4); }
+  .card[data-esi="5"]::before { background: var(--esi5); }
+
+  .card.resolved { opacity: 0.45; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .esi-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 20px;
+  }
+  .esi-badge[data-esi="1"] { color: var(--esi1); background: var(--esi1-bg); }
+  .esi-badge[data-esi="2"] { color: var(--esi2); background: var(--esi2-bg); }
+  .esi-badge[data-esi="3"] { color: var(--esi3); background: var(--esi3-bg); }
+  .esi-badge[data-esi="4"] { color: var(--esi4); background: var(--esi4-bg); }
+  .esi-badge[data-esi="5"] { color: var(--esi5); background: var(--esi5-bg); }
+
+  .case-id { color: var(--text-faint); font-size: 11px; }
+  .symptom { font-size: 14px; margin: 10px 0; line-height: 1.5; }
+  .vitals-row { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0; }
+  .vital { font-size: 12px; color: var(--text-dim); }
+  .vital b { color: var(--text); font-size: 14px; display: block; }
+  .rationale { font-size: 11px; color: var(--text-faint); margin: 8px 0 14px; line-height: 1.6; }
+  .meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .actions { display: flex; gap: 8px; }
+  .btn-accept { background: var(--esi5); color: #0A1F14; border: none; font-weight: 600; }
+  .btn-decline { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }
+  .btn-accept:hover { filter: brightness(1.1); }
+  .status-tag { font-size: 11px; padding: 3px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .status-tag.accepted { background: var(--esi5-bg); color: var(--esi5); }
+  .status-tag.declined { background: var(--panel-raised); color: var(--text-faint); }
+  .status-tag.stood_down { background: var(--panel-raised); color: var(--text-faint); }
+
+  /* ── ETA Countdown ──────────────────────────────────── */
+  .eta-timer { font-size: 14px; font-weight: 700; font-family: 'SF Mono', Consolas, Menlo, monospace; color: var(--accent); }
+  .eta-timer.warning { color: var(--esi2); animation: etaPulse 1s infinite; }
+  .eta-timer.arriving {
+    color: var(--esi1);
+    background: var(--esi1-bg);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--esi1);
+    animation: etaFlash 0.6s infinite;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  @keyframes etaPulse  { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  @keyframes etaFlash  { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+</head>
+<body>
+
+<div id="loginGate" style="position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:32px; width:320px;">
+    <div style="font-size:13px; font-weight:700; letter-spacing:0.04em; margin-bottom:4px; color:var(--text);">HOSPITAL LOGIN</div>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:20px;">Sign in to view live dispatch requests for your hospital.</div>
+    <label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:5px;">Hospital</label>
+    <select id="loginHospitalSelect" style="width:100%; background:var(--panel-raised); border:1px solid var(--line); color:var(--text); padding:9px; border-radius:6px; margin-bottom:14px; font-size:13px;"></select>
+    <label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:5px;">Access key</label>
+    <input id="loginKeyInput" type="password" placeholder="e.g. h001-demo-key" style="width:100%; background:var(--panel-raised); border:1px solid var(--line); color:var(--text); padding:9px; border-radius:6px; margin-bottom:6px; font-size:13px; box-sizing:border-box;">
+    <div id="loginError" style="color:var(--esi1); font-size:12px; min-height:16px; margin-bottom:10px;"></div>
+    <button onclick="attemptLogin()" style="width:100%; padding:12px; border-radius:8px; border:none; background:var(--accent); color:#06222A; font-weight:700; font-size:14px; cursor:pointer;">Sign in</button>
+  </div>
+</div>
+
+<header style="opacity:0.3; pointer-events:none;" id="mainHeader"></header>
+<header style="display:none;" id="realHeader">
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>DISPATCH CONSOLE</h1>
+      <div class="sub" id="hospitalLabel">Coimbatore General Hospital</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="capacity-status-container" style="display: flex; align-items: center; gap: 8px; margin-right: 12px; background: var(--panel-raised); border: 1px solid var(--line); padding: 4px 8px; border-radius: 6px;">
+      <span style="font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; letter-spacing: 0.02em;">Capacity:</span>
+      <select id="capacitySelect" onchange="updateCapacityStatus(this.value)" style="background: transparent; border: none; color: var(--text); font-size: 12px; font-weight: 600; padding: 0 4px; cursor: pointer; outline: none;">
+        <option value="available" style="background: var(--panel);">🟢 Available</option>
+        <option value="busy" style="background: var(--panel);">🟡 Busy</option>
+        <option value="full" style="background: var(--panel);">🔴 Full</option>
+      </select>
+    </div>
+    <div class="conn-status"><span class="conn-dot" id="connDot"></span><span id="connText">connecting…</span></div>
+    <button onclick="logout()" style="font-size:12px; padding:6px 10px;">Sign out</button>
+  </div>
+
+</header>
+
+<main>
+  <div class="sim-panel">
+    <span class="label">Simulate incoming case →</span>
+    <button onclick="simulate('cardiac_arrest')">Cardiac Arrest</button>
+    <button onclick="simulate('chest_pain')">Chest Pain</button>
+    <button onclick="simulate('stroke')">Stroke</button>
+    <button onclick="simulate('road_trauma')">Road Trauma</button>
+    <button onclick="simulate('fracture_stable')">Fracture</button>
+    <button onclick="simulate('fever_general')">Fever</button>
+  </div>
+
+  <div id="feed"></div>
+  <div class="empty" id="emptyState">
+    <div class="glyph">◎</div>
+    No active requests. Waiting for ambulance dispatch…
+  </div>
+</main>
+
+<script>
+// Same-origin now that this file is served BY the backend (via /dashboard mount)
+// instead of opened as file:// — this is what makes the WebSocket connection
+// actually work reliably across browsers (file:// origins block/flake on WS).
+const API = window.location.origin;
+const WS_BASE = `ws://${window.location.host}`;
+let currentHospital = null;
+let currentKey = null;
+let ws = null;
+let reconnectInterval = null;
+const requests = {}; // request_id -> element + data
+
+async function loadHospitalOptions() {
+  const res = await fetch(`${API}/api/hospitals`);
+  const hospitals = await res.json();
+  const sel = document.getElementById('loginHospitalSelect');
+  sel.innerHTML = hospitals.map(h => `<option value="${h.hospital_id}">${h.name}</option>`).join('');
+  return hospitals;
+}
+
+async function attemptLogin() {
+  const hospitalId = document.getElementById('loginHospitalSelect').value;
+  const key = document.getElementById('loginKeyInput').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  if (!key) { errEl.textContent = 'Enter your access key.'; return; }
+
+  const res = await fetch(`${API}/api/auth/login`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hospital_id: hospitalId, access_key: key})
+  });
+
+  if (!res.ok) { errEl.textContent = 'Invalid hospital or access key.'; return; }
+
+  const data = await res.json();
+  currentHospital = data.hospital_id;
+  currentKey = key;
+  document.getElementById('hospitalLabel').textContent = data.hospital_name;
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('realHeader').style.display = 'flex';
+
+  // Set initial capacity status for logged in hospital
+  try {
+    const hospRes = await fetch(`${API}/api/hospitals`);
+    const hospitals = await hospRes.json();
+    const currentHospInfo = hospitals.find(h => h.hospital_id === currentHospital);
+    if (currentHospInfo) {
+      document.getElementById('capacitySelect').value = currentHospInfo.capacity_status;
+    }
+  } catch (e) {
+    console.error('Error fetching initial capacity:', e);
+  }
+
+  connect();
+}
+
+async function updateCapacityStatus(status) {
+  if (!currentHospital || !currentKey) return;
+  try {
+    const res = await fetch(`${API}/api/hospitals/${currentHospital}/capacity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hospital-Key': currentKey
+      },
+      body: JSON.stringify({ capacity_status: status })
+    });
+    if (!res.ok) {
+      alert('Failed to update capacity status.');
+    }
+  } catch (e) {
+    console.error('Error updating capacity:', e);
+    alert('Error updating capacity status.');
+  }
+}
+
+
+function logout() {
+  if (reconnectInterval) {
+    clearInterval(reconnectInterval);
+    reconnectInterval = null;
+  }
+  if (ws) ws.close();
+  currentHospital = null; currentKey = null;
+  document.getElementById('loginKeyInput').value = '';
+  document.getElementById('loginGate').style.display = 'flex';
+  document.getElementById('realHeader').style.display = 'none';
+}
+
+function connect() {
+  if (ws) {
+    try {
+      ws.close();
+    } catch(e) {}
+  }
+  
+  ws = new WebSocket(`${WS_BASE}/ws/hospital/${currentHospital}?key=${encodeURIComponent(currentKey)}`);
+  
+  ws.onopen = () => {
+    setConn(true);
+    if (reconnectInterval) {
+      clearInterval(reconnectInterval);
+      reconnectInterval = null;
+    }
+  };
+  
+  ws.onclose = () => {
+    setConn(false);
+    scheduleReconnect();
+  };
+  
+  ws.onerror = () => {
+    setConn(false);
+  };
+  
+  ws.onmessage = (msg) => handleEvent(JSON.parse(msg.data));
+}
+
+function scheduleReconnect() {
+  if (reconnectInterval) return;
+  reconnectInterval = setInterval(() => {
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      console.log("WebSocket disconnected. Attempting reconnect...");
+      connect();
+    }
+  }, 3000);
+}
+
+
+function setConn(live) {
+  document.getElementById('connDot').classList.toggle('live', live);
+  document.getElementById('connText').textContent = live ? 'live' : 'disconnected';
+}
+
+function handleEvent(evt) {
+  if (evt.type === 'new_request') renderCard(evt);
+  else if (evt.type === 'confirmed') markResolved(evt.request_id, 'accepted', true);
+  else if (evt.type === 'stand_down') markCaseStoodDown(evt.case_id, evt.winner);
+}
+
+function renderCard(evt) {
+  document.getElementById('emptyState').style.display = 'none';
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.dataset.esi = evt.esi_level;
+  el.id = `req-${evt.request_id}`;
+  el.innerHTML = `
+    <div class="card-top">
+      <div>
+        <span class="esi-badge" data-esi="${evt.esi_level}">ESI-${evt.esi_level} · ${evt.esi_label}</span>
+        <div class="case-id mono">${evt.case_id} · ${evt.specialty}</div>
+      </div>
+      <div class="case-id mono">${evt.request_id}</div>
+    </div>
+    <div class="symptom">${evt.symptom_text}</div>
+    <div class="vitals-row">
+      <div class="vital">HR<b class="mono">${evt.vitals.heart_rate_bpm}</b></div>
+      <div class="vital">SpO2<b class="mono">${evt.vitals.spo2_percent}%</b></div>
+      <div class="vital">BP sys<b class="mono">${evt.vitals.bp_systolic_mmhg}</b></div>
+      <div class="vital">Temp<b class="mono">${evt.vitals.temperature_celsius}°C</b></div>
+      <div class="vital">ETA<b><span class="eta-timer" id="eta-${evt.request_id}">${String(Math.floor(evt.eta_minutes)).padStart(2,'0')}:00</span></b></div>
+      <div class="vital">Dist<b class="mono">${evt.distance_km} km</b></div>
+    </div>
+    <div class="rationale">${evt.rationale.join(' · ')}</div>
+    <div class="meta-row">
+      <span id="status-${evt.request_id}"></span>
+      <div class="actions" id="actions-${evt.request_id}">
+        <button class="btn-decline" onclick="respond('${evt.request_id}','declined')">Decline</button>
+        <button class="btn-accept" onclick="respond('${evt.request_id}','accepted')">Confirm Readiness</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('feed').prepend(el);
+  requests[evt.request_id] = evt;
+  startEtaTimer(evt.request_id, evt.eta_minutes);
+}
+
+async function respond(requestId, status) {
+  const res = await fetch(`${API}/api/requests/${requestId}/respond`, {
+    method: 'POST', headers: {'Content-Type': 'application/json', 'X-Hospital-Key': currentKey},
+    body: JSON.stringify({status})
+  });
+  const data = await res.json();
+  if (status === 'declined') {
+    markResolved(requestId, 'declined', false);
+  } else {
+    // Don't assume we won yet — FR-3.6 holds accepts briefly to rank against
+    // any other near-simultaneous accepts. Real resolution comes via the
+    // 'confirmed' or 'stand_down' WebSocket events once ranking finishes.
+    showHolding(requestId);
+  }
+}
+
+function showHolding(requestId) {
+  const actionsEl = document.getElementById(`actions-${requestId}`);
+  if (actionsEl) actionsEl.innerHTML = '<span style="color: var(--text-faint); font-size: 12px;">awaiting ranking…</span>';
+  const statusEl = document.getElementById(`status-${requestId}`);
+  if (statusEl) statusEl.innerHTML = '<span class="status-tag" style="background: var(--panel-raised); color: var(--text-dim);">Accepted — confirming best match</span>';
+}
+
+// ── ETA Timer management ──────────────────────────────────────────────────────
+const timers = {}; // request_id -> { interval, etaEndMs }
+
+function startEtaTimer(requestId, etaMinutes) {
+  const etaEndMs = Date.now() + etaMinutes * 60 * 1000;
+  const span = document.getElementById(`eta-${requestId}`);
+  if (!span) return;
+
+  function tick() {
+    const remainMs = etaEndMs - Date.now();
+    if (remainMs <= 0) {
+      span.textContent = 'ARRIVING NOW';
+      span.className = 'eta-timer arriving';
+      return;
+    }
+    const totalSec = Math.ceil(remainMs / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    span.textContent = `${mm}:${ss}`;
+    span.className = 'eta-timer' + (remainMs < 2 * 60 * 1000 ? ' warning' : '');
+  }
+
+  tick(); // immediate first render
+  timers[requestId] = setInterval(tick, 1000);
+}
+
+function stopEtaTimer(requestId) {
+  if (timers[requestId]) {
+    clearInterval(timers[requestId]);
+    delete timers[requestId];
+  }
+}
+
+// ── Card resolution helpers ───────────────────────────────────────────────────
+function markResolved(requestId, statusLabel, isWinner) {
+  const el = document.getElementById(`req-${requestId}`);
+  if (!el) return;
+  stopEtaTimer(requestId);
+  el.classList.add('resolved');
+  document.getElementById(`actions-${requestId}`).innerHTML = '';
+  document.getElementById(`status-${requestId}`).innerHTML =
+    `<span class="status-tag ${statusLabel}">${isWinner ? 'Confirmed — patient inbound' : statusLabel}</span>`;
+}
+
+function markCaseStoodDown(caseId, winnerName) {
+  Object.entries(requests).forEach(([rid, evt]) => {
+    if (evt.case_id === caseId) {
+      const el = document.getElementById(`req-${rid}`);
+      if (el && !el.classList.contains('resolved')) {
+        stopEtaTimer(rid);
+        el.classList.add('resolved');
+        const actionsEl = document.getElementById(`actions-${rid}`);
+        if (actionsEl) actionsEl.innerHTML = '';
+        document.getElementById(`status-${rid}`).innerHTML =
+          `<span class="status-tag stood_down">Assigned to ${winnerName}</span>`;
+      }
+    }
+  });
+}
+
+async function simulate(scenario) {
+  await fetch(`${API}/api/simulate/${scenario}`, { method: 'POST' });
+}
+
+loadHospitalOptions();
+</script>
+</body>
+</html>
