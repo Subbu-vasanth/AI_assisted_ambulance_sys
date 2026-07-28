@@ -54,6 +54,18 @@ def _init_db():
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_req_case ON dispatch_requests(case_id)")
+        # Safe migration: add ambulance position + arriving_soon columns if missing.
+        # ALTER TABLE ... ADD COLUMN is idempotent-safe in SQLite (errors silently
+        # if the column already exists, which we catch and ignore).
+        for col_sql in [
+            "ALTER TABLE cases ADD COLUMN ambulance_lat REAL",
+            "ALTER TABLE cases ADD COLUMN ambulance_lng REAL",
+            "ALTER TABLE cases ADD COLUMN arriving_soon_sent INTEGER NOT NULL DEFAULT 0",
+        ]:
+            try:
+                conn.execute(col_sql)
+            except Exception:
+                pass  # column already exists
         conn.commit()
 
 
@@ -159,7 +171,49 @@ def _row_to_case(row) -> dict:
         "case_id": row["case_id"], "triage": json.loads(row["triage"]),
         "winner": row["winner_hospital_id"], "ranking_started": bool(row["ranking_started"]),
         "candidate_accepts": json.loads(row["candidate_accepts"]), "created_at": row["created_at"],
+        "ambulance_lat": row["ambulance_lat"] if "ambulance_lat" in row.keys() else None,
+        "ambulance_lng": row["ambulance_lng"] if "ambulance_lng" in row.keys() else None,
+        "arriving_soon_sent": bool(row["arriving_soon_sent"]) if "arriving_soon_sent" in row.keys() else False,
     }
+
+
+# ---------------------------------------------------------- ambulance position ---
+def update_ambulance_position(case_id: str, lat: float, lng: float):
+    """Overwrites the case's latest known ambulance position (single field, not history)."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE cases SET ambulance_lat = ?, ambulance_lng = ? WHERE case_id = ?",
+            (lat, lng, case_id),
+        )
+        conn.commit()
+
+
+def get_ambulance_position(case_id: str):
+    """Returns (lat, lng) or None if no position has been recorded."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT ambulance_lat, ambulance_lng FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+    if row and row["ambulance_lat"] is not None and row["ambulance_lng"] is not None:
+        return (row["ambulance_lat"], row["ambulance_lng"])
+    return None
+
+
+def mark_arriving_soon_sent(case_id: str):
+    """Marks arriving_soon as sent so it fires exactly once per case."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE cases SET arriving_soon_sent = 1 WHERE case_id = ?", (case_id,)
+        )
+        conn.commit()
+
+
+def is_arriving_soon_sent(case_id: str) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT arriving_soon_sent FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+    return bool(row["arriving_soon_sent"]) if row else False
 
 
 _init_db()

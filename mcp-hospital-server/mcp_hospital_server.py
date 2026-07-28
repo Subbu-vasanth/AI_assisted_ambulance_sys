@@ -190,7 +190,7 @@ class StanddownInput(BaseModel):
 def broadcast_standdown(input: StanddownInput) -> str:
     notified = []
     for req in store.get_requests_by_case(input.case_id):
-        if req["hospital_id"] != input.winning_hospital_id and req["status"] == "pending":
+        if req["hospital_id"] != input.winning_hospital_id and req["status"] != "stood_down":
             store.update_request_status(req["request_id"], "stood_down")
             notified.append(req["hospital_name"])
     return json.dumps({"case_id": input.case_id, "stood_down": notified,

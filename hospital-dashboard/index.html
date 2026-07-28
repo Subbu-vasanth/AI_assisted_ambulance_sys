@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hospital Dispatch Console</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
     --bg: #12161B;
@@ -162,6 +164,31 @@
   }
   @keyframes etaPulse  { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
   @keyframes etaFlash  { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── Embedded ambulance tracking map ─────── */
+  .amb-map-container {
+    margin-top: 14px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--line); height: 180px;
+  }
+  .amb-map-container .leaflet-container {
+    height: 100%; width: 100%; background: var(--bg);
+  }
+
+  /* ── Arriving soon banner ─────────────────── */
+  .arriving-banner {
+    margin-top: 10px; padding: 10px 14px; border-radius: 8px;
+    background: rgba(229,72,77,0.12); border: 1px solid var(--esi1);
+    font-size: 13px; font-weight: 600; color: var(--esi1);
+    display: flex; align-items: center; gap: 8px;
+    animation: etaFlash 1.2s infinite;
+  }
+  .arriving-banner .icon { font-size: 18px; }
+
+  /* ── Live ETA update on card ──────────────── */
+  .live-eta {
+    font-size: 12px; color: var(--accent); margin-top: 8px;
+    font-family: 'SF Mono', Consolas, Menlo, monospace;
+  }
 </style>
 </head>
 <body>
@@ -360,6 +387,8 @@ function handleEvent(evt) {
   if (evt.type === 'new_request') renderCard(evt);
   else if (evt.type === 'confirmed') markResolved(evt.request_id, 'accepted', true);
   else if (evt.type === 'stand_down') markCaseStoodDown(evt.case_id, evt.winner);
+  else if (evt.type === 'ambulance_position') handleAmbulancePosition(evt);
+  else if (evt.type === 'arriving_soon') handleArrivingSoon(evt);
 }
 
 function renderCard(evt) {
@@ -487,6 +516,130 @@ async function simulate(scenario) {
 }
 
 loadHospitalOptions();
+
+// ── Ambulance tracking maps (per case_id) ────────────────────────────────────
+const caseMaps = {};  // case_id -> { map, ambulanceMarker, hospitalMarker }
+
+function makeTrackingIcon(emoji, size) {
+  return L.divIcon({
+    html: `<div style="font-size:${size}px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${emoji}</div>`,
+    iconSize: [size + 4, size + 4],
+    iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    className: ''
+  });
+}
+const ambIcon = makeTrackingIcon('🚑', 22);
+const hospIcon = makeTrackingIcon('🏥', 20);
+
+function getCardForCase(caseId) {
+  // Find the card element for this case_id by checking our requests map
+  for (const [rid, evt] of Object.entries(requests)) {
+    if (evt.case_id === caseId) {
+      return document.getElementById(`req-${rid}`);
+    }
+  }
+  return null;
+}
+
+function ensureMapForCase(caseId, ambLat, ambLng) {
+  if (caseMaps[caseId]) return caseMaps[caseId];
+
+  const card = getCardForCase(caseId);
+  if (!card) return null;
+
+  // Don't add a map if there's already one
+  if (card.querySelector('.amb-map-container')) {
+    return null;
+  }
+
+  // Get hospital coords from the card's request data
+  // We need to fetch hospital info; use the status endpoint
+  const container = document.createElement('div');
+  container.className = 'amb-map-container';
+  container.id = `map-${caseId}`;
+  card.appendChild(container);
+
+  const mapEl = document.createElement('div');
+  mapEl.style.height = '100%';
+  mapEl.style.width = '100%';
+  container.appendChild(mapEl);
+
+  const trackMap = L.map(mapEl, {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false
+  }).setView([ambLat, ambLng], 14);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(trackMap);
+
+  const ambulanceMarker = L.marker([ambLat, ambLng], { icon: ambIcon }).addTo(trackMap);
+  let hospitalMarker = null;
+
+  // Fetch hospital location
+  fetch(`${API}/api/cases/${caseId}/status`).then(r => r.json()).then(data => {
+    if (data.winner_lat && data.winner_lng) {
+      hospitalMarker = L.marker([data.winner_lat, data.winner_lng], { icon: hospIcon }).addTo(trackMap);
+      const bounds = L.latLngBounds([
+        [ambLat, ambLng],
+        [data.winner_lat, data.winner_lng]
+      ]);
+      trackMap.fitBounds(bounds.pad(0.2));
+      caseMaps[caseId].hospitalMarker = hospitalMarker;
+    }
+  }).catch(e => console.error('Failed to fetch case status for map:', e));
+
+  caseMaps[caseId] = { map: trackMap, ambulanceMarker, hospitalMarker };
+
+  // Force Leaflet to recalculate dimensions after DOM insertion
+  setTimeout(() => trackMap.invalidateSize(), 100);
+
+  return caseMaps[caseId];
+}
+
+function handleAmbulancePosition(evt) {
+  const mapData = ensureMapForCase(evt.case_id, evt.lat, evt.lng);
+  if (mapData) {
+    // Move ambulance marker directly (no animation)
+    mapData.ambulanceMarker.setLatLng([evt.lat, evt.lng]);
+
+    // Refit bounds if we have hospital marker
+    if (mapData.hospitalMarker) {
+      const bounds = L.latLngBounds([
+        [evt.lat, evt.lng],
+        mapData.hospitalMarker.getLatLng()
+      ]);
+      mapData.map.fitBounds(bounds.pad(0.2));
+    }
+  }
+
+  // Update live ETA display on the card
+  const card = getCardForCase(evt.case_id);
+  if (card) {
+    let liveEl = card.querySelector('.live-eta');
+    if (!liveEl) {
+      liveEl = document.createElement('div');
+      liveEl.className = 'live-eta';
+      card.appendChild(liveEl);
+    }
+    liveEl.textContent = `🚑 Live: ${evt.distance_km} km · ETA ${evt.eta_minutes} min`;
+  }
+}
+
+function handleArrivingSoon(evt) {
+  const card = getCardForCase(evt.case_id);
+  if (!card) return;
+
+  // Only show once — check if banner already exists
+  if (card.querySelector('.arriving-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'arriving-banner';
+  banner.innerHTML = `<span class="icon">🚨</span> Ambulance arriving in &lt;5 min (ETA: ${evt.eta_minutes} min)`;
+  card.appendChild(banner);
+}
 </script>
 </body>
 </html>

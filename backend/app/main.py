@@ -44,6 +44,7 @@ from services.websocket_manager import manager        # noqa: E402
 from services.whisper_service import transcribe_audio  # noqa: E402
 from services import audit_service                     # noqa: E402
 from services import dispatch_store as store            # noqa: E402
+from services import routing_service                   # noqa: E402
 
 app = FastAPI(title="Connected Ambulance System API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -51,6 +52,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 _FRONTEND_ROOT = os.path.join(_HERE, "..", "..")
 app.mount("/ambulance", StaticFiles(directory=os.path.join(_FRONTEND_ROOT, "ambulance-app"), html=True), name="ambulance-app")
 app.mount("/dashboard", StaticFiles(directory=os.path.join(_FRONTEND_ROOT, "hospital-dashboard"), html=True), name="hospital-dashboard")
+
+# Create the ambulance-driver directory if it doesn't exist yet (avoids startup crash
+# during the build phase when the file hasn't been created)
+_DRIVER_DIR = os.path.join(_FRONTEND_ROOT, "ambulance-driver")
+os.makedirs(_DRIVER_DIR, exist_ok=True)
+app.mount("/driver", StaticFiles(directory=_DRIVER_DIR, html=True), name="ambulance-driver")
 
 
 def haversine_eta_minutes(dist_km, avg_speed_kmh=35):
@@ -241,6 +248,18 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
             "distance_km": c["distance_km"],
         })
 
+    # 5. Schedule timeout for auto-widening if no hospital confirms (FR-3.5)
+    asyncio.create_task(_check_and_widen_dispatch(
+        case_id=case_id,
+        lat=case_in.location.lat,
+        lng=case_in.location.lng,
+        specialty=triage["specialty"],
+        current_radius=query.radius_km,
+        symptom_text=case_in.symptom_text,
+        vitals=case_in.vitals.dict(),
+        initial_radius_km=case_in.radius_km
+    ))
+
     return {
         "case_id": case_id,
         "triage": triage,
@@ -249,7 +268,122 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
     }
 
 
-ACCEPT_HOLD_WINDOW_SECONDS = 4.0  # FR-3.6: window to let near-simultaneous accepts arrive before ranking
+# How long to wait for ANY hospital to accept before auto-widening the search
+# radius (FR-3.5). This is the PRE-ACCEPT timeout — distinct from
+# ACCEPT_HOLD_WINDOW_SECONDS which is the POST-ACCEPT ranking window.
+DISPATCH_TIMEOUT_SECONDS = float(os.environ.get("DISPATCH_TIMEOUT_SECONDS", "25.0"))
+MAX_RADIUS_KM = 32.0
+
+
+async def _check_and_widen_dispatch(case_id: str, lat: float, lng: float, specialty: str, current_radius: float, symptom_text: str, vitals: dict, initial_radius_km: float):
+    """
+    FR-3.5: If no hospital confirms within a timeout, auto-widen the radius and re-broadcast.
+    Runs as a background task.
+    """
+    await asyncio.sleep(DISPATCH_TIMEOUT_SECONDS)
+
+    # 1. Check if the case is already resolved or in the ranking phase
+    case = store.get_case(case_id)
+    if not case:
+        return
+    if case["winner"] is not None or case["ranking_started"] or case["candidate_accepts"]:
+        return  # already accepted/resolved or ranking has started
+
+    # 2. Widen the radius. Loop to widen immediately (zero-delay) if we find no candidates,
+    # up to the MAX_RADIUS_KM limit.
+    new_radius = current_radius
+    new_candidates = []
+
+    while new_radius < MAX_RADIUS_KM and not new_candidates:
+        previous_radius = new_radius
+        new_radius = new_radius * 2
+        
+        # Find matching hospitals in the new radius
+        query = hosp.NearbyQuery(lat=lat, lng=lng, specialty=specialty, radius_km=new_radius)
+        result = json.loads(hosp.find_matching_hospitals(query))
+        candidates = result.get("candidates", [])
+
+        # Filter out hospitals we already sent requests to
+        existing_requests = store.get_requests_by_case(case_id)
+        notified_hospital_ids = {r["hospital_id"] for r in existing_requests}
+        new_candidates = [c for c in candidates if c["hospital_id"] not in notified_hospital_ids]
+
+        if not new_candidates:
+            audit_service.log_event(case_id, "radius_widened_no_candidates", "dispatch_orchestrator", {
+                "previous_radius_km": previous_radius,
+                "attempted_radius_km": new_radius,
+                "message": "No new candidates found in this radius, expanding further."
+            })
+
+    if (new_radius > MAX_RADIUS_KM and not new_candidates) or not new_candidates:
+        audit_service.log_event(case_id, "dispatch_timeout_failed", "dispatch_orchestrator", {
+            "error": f"Reached maximum search radius of {MAX_RADIUS_KM}km without hospital confirmation.",
+            "final_radius_km": min(new_radius, MAX_RADIUS_KM)
+        })
+        return
+
+    # 3. Double-check case status immediately before logging/broadcasting (guards against race conditions)
+    case = store.get_case(case_id)
+    if not case or case["winner"] is not None or case["ranking_started"] or case["candidate_accepts"]:
+        return
+
+    # 4. Log the audit event for radius widening
+    audit_service.log_event(case_id, "radius_widened", "dispatch_orchestrator", {
+        "previous_radius_km": current_radius,
+        "new_radius_km": new_radius,
+        "new_candidates": [{"hospital_id": c["hospital_id"], "name": c["name"], "distance_km": c["distance_km"]} for c in new_candidates]
+    })
+
+    # 5. Save requests and broadcast to new candidates
+    for c in new_candidates:
+        # Double-check inside loop to handle race conditions during async socket transmits
+        case = store.get_case(case_id)
+        if not case or case["winner"] is not None or case["ranking_started"]:
+            break
+
+        dispatch_input = hosp.DispatchInput(
+            case_id=case_id, hospital_id=c["hospital_id"],
+            esi_level=case["triage"]["esi_level"], specialty=specialty,
+            vitals=vitals, symptom_text=symptom_text,
+            eta_minutes=haversine_eta_minutes(c["distance_km"]), distance_km=c["distance_km"],
+        )
+        resp = json.loads(hosp.send_dispatch_request(dispatch_input))
+
+        audit_service.log_event(case_id, "dispatch_sent", "dispatch_orchestrator", {
+            "request_id": resp["request_id"], "hospital_id": c["hospital_id"],
+            "hospital_name": resp["sent_to"], "distance_km": c["distance_km"],
+            "eta_minutes": dispatch_input.eta_minutes,
+            "widen_stage": True
+        })
+
+        await manager.send_to_hospital(c["hospital_id"], {
+            "type": "new_request",
+            "request_id": resp["request_id"],
+            "case_id": case_id,
+            "esi_level": case["triage"]["esi_level"],
+            "esi_label": case["triage"]["label"],
+            "specialty": specialty,
+            "rationale": case["triage"]["rationale"],
+            "vitals": vitals,
+            "symptom_text": symptom_text,
+            "eta_minutes": dispatch_input.eta_minutes,
+            "distance_km": c["distance_km"],
+        })
+
+    # 6. Only schedule the next timeout check if there's room to widen further.
+    #    If we've already hit MAX_RADIUS_KM, the while loop above will immediately
+    #    exhaust on the next cycle and log dispatch_timeout_failed for no reason.
+    if new_radius < MAX_RADIUS_KM:
+        asyncio.create_task(_check_and_widen_dispatch(
+            case_id, lat, lng, specialty, new_radius, symptom_text, vitals, initial_radius_km
+        ))
+
+
+
+# How long to hold after the FIRST accept before ranking all accepts received
+# during this window (FR-3.6). This is the POST-ACCEPT ranking window —
+# distinct from DISPATCH_TIMEOUT_SECONDS which is the PRE-ACCEPT widen timeout.
+ACCEPT_HOLD_WINDOW_SECONDS = 4.0
 
 
 def _capacity_rank(status: str) -> int:
@@ -349,6 +483,103 @@ async def respond_to_request(request_id: str, body: RespondIn, x_hospital_key: s
     return {
         "status": "accepted", "case_id": case_id,
         "note": f"held for ranking against other accepts for {ACCEPT_HOLD_WINDOW_SECONDS}s (FR-3.6)",
+    }
+
+
+# -------------------------------------------------------- position tracking ---
+class PositionIn(BaseModel):
+    lat: float
+    lng: float
+
+
+@app.post("/api/cases/{case_id}/position")
+async def update_position(case_id: str, body: PositionIn):
+    """Called every 30s by the ambulance driver app once a case is confirmed.
+    Overwrites the case's latest position (single field, not history).
+    If a winner exists, recomputes route/ETA and pushes to the hospital."""
+    case = store.get_case(case_id)
+    if not case:
+        raise HTTPException(404, f"Unknown case_id '{case_id}'")
+
+    store.update_ambulance_position(case_id, body.lat, body.lng)
+
+    result = {"status": "position_updated", "case_id": case_id}
+
+    # If a winner exists, recompute route and push to hospital
+    if case["winner"]:
+        hospital = hosp.HOSPITALS.get(case["winner"])
+        if hospital:
+            route = routing_service.get_route(
+                body.lat, body.lng, hospital["lat"], hospital["lng"]
+            )
+            result["distance_km"] = route["distance_km"]
+            result["eta_minutes"] = route["eta_minutes"]
+
+            # Push ambulance_position event to the winning hospital
+            await manager.send_to_hospital(case["winner"], {
+                "type": "ambulance_position",
+                "case_id": case_id,
+                "lat": body.lat,
+                "lng": body.lng,
+                "distance_km": route["distance_km"],
+                "eta_minutes": route["eta_minutes"],
+            })
+
+            # Fire arriving_soon exactly once when ETA first drops below 5 min
+            if route["eta_minutes"] < 5 and not store.is_arriving_soon_sent(case_id):
+                store.mark_arriving_soon_sent(case_id)
+                await manager.send_to_hospital(case["winner"], {
+                    "type": "arriving_soon",
+                    "case_id": case_id,
+                    "eta_minutes": route["eta_minutes"],
+                })
+
+    return result
+
+
+@app.get("/api/cases/{case_id}/route")
+def get_case_route(case_id: str):
+    """Returns the full traffic-annotated route from the ambulance's latest
+    known position to the winning hospital's coordinates."""
+    case = store.get_case(case_id)
+    if not case:
+        raise HTTPException(404, f"Unknown case_id '{case_id}'")
+    if not case["winner"]:
+        raise HTTPException(404, "No winner assigned yet — route not available")
+
+    pos = store.get_ambulance_position(case_id)
+    if not pos:
+        raise HTTPException(404, "No ambulance position recorded yet")
+
+    hospital = hosp.HOSPITALS.get(case["winner"])
+    if not hospital:
+        raise HTTPException(404, f"Winner hospital '{case['winner']}' not found")
+
+    route = routing_service.get_route(pos[0], pos[1], hospital["lat"], hospital["lng"])
+    return {
+        "case_id": case_id,
+        "ambulance": {"lat": pos[0], "lng": pos[1]},
+        "hospital": {"lat": hospital["lat"], "lng": hospital["lng"], "name": hospital["name"]},
+        **route,
+    }
+
+
+@app.get("/api/cases/{case_id}/status")
+def get_case_status(case_id: str):
+    """Returns case resolution status — the ambulance app polls this to know
+    when to switch to the route/navigation screen."""
+    case = store.get_case(case_id)
+    if not case:
+        raise HTTPException(404, f"Unknown case_id '{case_id}'")
+
+    winner_hospital = hosp.HOSPITALS.get(case["winner"]) if case["winner"] else None
+    return {
+        "case_id": case_id,
+        "status": "resolved" if case["winner"] else "pending",
+        "winner_hospital_id": case["winner"],
+        "winner_hospital_name": winner_hospital["name"] if winner_hospital else None,
+        "winner_lat": winner_hospital["lat"] if winner_hospital else None,
+        "winner_lng": winner_hospital["lng"] if winner_hospital else None,
     }
 
 

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Ambulance Driver — Route Navigation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #12161B; --panel: #1A1F26; --panel-raised: #212832; --line: #2A323D;
+    --text: #E8EDF2; --text-dim: #8A97A6; --text-faint: #5A6472; --accent: #4CC3C9;
+    --esi1: #E5484D; --esi2: #F5A623; --esi3: #E8C547; --esi4: #4CC3C9; --esi5: #6FCF97;
+    --traffic-free: #6FCF97; --traffic-moderate: #F5A623; --traffic-heavy: #E5484D;
+    --traffic-blocked: #9B1D20; --traffic-unknown: #8A97A6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  .mono { font-family: 'SF Mono', Consolas, Menlo, monospace; }
+
+  /* ── Header ─────────────────────────────── */
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--panel); flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .brand h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.03em; }
+  .brand .sub { color: var(--text-dim); font-size: 11px; }
+  .conn-badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 5px;
+    background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim);
+  }
+  .conn-badge.live { border-color: var(--esi5); color: var(--esi5); }
+
+  /* ── Setup Screen ───────────────────────── */
+  #setupScreen {
+    display: flex; flex: 1; align-items: center; justify-content: center;
+  }
+  .setup-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 32px; width: 340px; max-width: 90vw;
+  }
+  .setup-card h2 { font-size: 15px; margin-bottom: 6px; }
+  .setup-card .desc { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.5; }
+  .setup-card label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 5px; }
+  .setup-card input {
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line);
+    color: var(--text); padding: 10px; border-radius: 6px; font-size: 14px;
+    font-family: 'SF Mono', Consolas, monospace; margin-bottom: 14px; box-sizing: border-box;
+  }
+  .setup-card .btn-start {
+    width: 100%; padding: 13px; border: none; border-radius: 8px;
+    background: var(--accent); color: #06222A; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .setup-card .btn-start:disabled { background: var(--panel-raised); color: var(--text-faint); cursor: default; }
+  #setupError { color: var(--esi1); font-size: 12px; min-height: 18px; margin-bottom: 8px; }
+  #waitingMsg {
+    display: none; font-size: 12px; color: var(--esi2); text-align: center;
+    padding: 12px; animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* ── Route Screen ───────────────────────── */
+  #routeScreen { display: none; flex: 1; flex-direction: column; }
+
+  /* Info overlay at the top of the map */
+  .info-overlay {
+    position: absolute; top: 14px; left: 14px; right: 14px; z-index: 1000;
+    display: flex; gap: 10px; pointer-events: none;
+  }
+  .info-box {
+    background: rgba(18, 22, 27, 0.92); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 18px; backdrop-filter: blur(8px);
+    pointer-events: auto;
+  }
+  .info-box .label { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .info-box .value { font-size: 32px; font-weight: 800; line-height: 1.1; }
+  .info-box .value.mono { font-family: 'SF Mono', Consolas, Menlo, monospace; }
+  .info-box .unit { font-size: 13px; color: var(--text-dim); font-weight: 400; }
+  .info-box.eta .value { color: var(--accent); }
+  .info-box.dist .value { color: var(--text); }
+
+  /* Hospital destination banner */
+  .dest-banner {
+    position: absolute; bottom: 14px; left: 14px; right: 14px; z-index: 1000;
+    background: rgba(18, 22, 27, 0.92); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 18px; backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dest-banner .dest-name { font-size: 14px; font-weight: 600; }
+  .dest-banner .dest-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .dest-banner .source-badge {
+    font-size: 10px; padding: 3px 7px; border-radius: 4px;
+    background: var(--panel-raised); color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* Arrived overlay */
+  .arrived-overlay {
+    display: none; position: absolute; inset: 0; z-index: 1100;
+    background: rgba(18, 22, 27, 0.85); backdrop-filter: blur(6px);
+    flex-direction: column; align-items: center; justify-content: center;
+  }
+  .arrived-overlay.show { display: flex; }
+  .arrived-overlay .check { font-size: 56px; color: var(--esi5); margin-bottom: 12px; }
+  .arrived-overlay .msg { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .arrived-overlay .sub { font-size: 13px; color: var(--text-dim); }
+
+  /* Map container fills remaining space */
+  #map { flex: 1; position: relative; }
+
+  /* Traffic legend */
+  .traffic-legend {
+    position: absolute; bottom: 80px; right: 14px; z-index: 1000;
+    background: rgba(18, 22, 27, 0.92); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(8px);
+    font-size: 10px;
+  }
+  .traffic-legend .legend-title { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; color: var(--text-dim); }
+  .legend-color { width: 16px; height: 3px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>AMBULANCE DRIVER</h1>
+      <div class="sub">Route Navigation</div>
+    </div>
+  </div>
+  <div class="conn-badge" id="connBadge">—</div>
+</header>
+
+<!-- ── Setup Screen ──────────────────────── -->
+<div id="setupScreen">
+  <div class="setup-card">
+    <h2>Enter Case ID</h2>
+    <div class="desc">Enter the case ID from dispatch to start route navigation. You'll see the live route once a hospital confirms.</div>
+    <label>Case ID</label>
+    <input type="text" id="caseIdInput" placeholder="CASE-XXXXXXXX" autofocus>
+    <div id="setupError"></div>
+    <button class="btn-start" id="startBtn" onclick="startTracking()">Start Tracking</button>
+    <div id="waitingMsg">⏳ Waiting for hospital confirmation…</div>
+  </div>
+</div>
+
+<!-- ── Route Screen ──────────────────────── -->
+<div id="routeScreen">
+  <div id="map">
+    <div class="info-overlay">
+      <div class="info-box eta">
+        <div class="label">ETA</div>
+        <div class="value mono" id="etaValue">--</div>
+      </div>
+      <div class="info-box dist">
+        <div class="label">Distance</div>
+        <div class="value mono" id="distValue">--</div>
+      </div>
+    </div>
+
+    <div class="dest-banner" id="destBanner">
+      <div>
+        <div class="dest-name" id="destName">—</div>
+        <div class="dest-sub" id="destSub">Destination hospital</div>
+      </div>
+      <div class="source-badge" id="sourceBadge">—</div>
+    </div>
+
+    <div class="traffic-legend">
+      <div class="legend-title">Traffic</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--traffic-free)"></div>Free flow</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--traffic-moderate)"></div>Moderate</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--traffic-heavy)"></div>Heavy</div>
+      <div class="legend-item"><div class="legend-color" style="background:var(--traffic-unknown)"></div>Unknown</div>
+    </div>
+
+    <div class="arrived-overlay" id="arrivedOverlay">
+      <div class="check">✓</div>
+      <div class="msg">Arrived</div>
+      <div class="sub" id="arrivedHospital">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const TRAFFIC_COLORS = {
+  free: '#6FCF97', moderate: '#F5A623', heavy: '#E5484D',
+  blocked: '#9B1D20', unknown: '#8A97A6'
+};
+
+let caseId = null;
+let map = null;
+let ambulanceMarker = null;
+let hospitalMarker = null;
+let routeLines = [];  // array of L.polyline segments
+let positionInterval = null;
+let statusPollInterval = null;
+let arrived = false;
+let winnerHospital = null;
+
+// ── Leaflet icon helpers ─────────────────────
+function makeIcon(emoji, size) {
+  return L.divIcon({
+    html: `<div style="font-size:${size}px; text-shadow: 0 2px 6px rgba(0,0,0,0.6);">${emoji}</div>`,
+    iconSize: [size + 4, size + 4],
+    iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    className: ''
+  });
+}
+const ambulanceIcon = makeIcon('🚑', 32);
+const hospitalIcon = makeIcon('🏥', 28);
+
+// ── URL param auto-fill ──────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('case_id')) {
+  document.getElementById('caseIdInput').value = urlParams.get('case_id');
+  // Auto-start if case_id is provided via URL
+  setTimeout(() => startTracking(), 300);
+}
+
+// ── Start tracking flow ──────────────────────
+async function startTracking() {
+  caseId = document.getElementById('caseIdInput').value.trim();
+  const errEl = document.getElementById('setupError');
+  errEl.textContent = '';
+  if (!caseId) { errEl.textContent = 'Enter a case ID.'; return; }
+
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('waitingMsg').style.display = 'block';
+
+  // Poll /status every 2s until winner is set, cap at 60s
+  let elapsed = 0;
+  statusPollInterval = setInterval(async () => {
+    elapsed += 2;
+    try {
+      const res = await fetch(`${API}/api/cases/${caseId}/status`);
+      if (!res.ok) {
+        errEl.textContent = `Case not found: ${caseId}`;
+        clearInterval(statusPollInterval);
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('waitingMsg').style.display = 'none';
+        return;
+      }
+      const data = await res.json();
+      if (data.status === 'resolved') {
+        clearInterval(statusPollInterval);
+        winnerHospital = {
+          id: data.winner_hospital_id,
+          name: data.winner_hospital_name,
+          lat: data.winner_lat,
+          lng: data.winner_lng
+        };
+        enterRouteScreen();
+      } else if (elapsed >= 60) {
+        clearInterval(statusPollInterval);
+        document.getElementById('waitingMsg').innerHTML =
+          '⚠️ Still waiting on hospitals — no confirmation after 60s. <br><button onclick="startTracking()" style="margin-top:8px;padding:6px 12px;border-radius:6px;background:var(--accent);color:#06222A;border:none;font-weight:600;cursor:pointer;">Retry</button>';
+      }
+    } catch (e) {
+      console.error('Status poll error:', e);
+    }
+  }, 2000);
+}
+
+// ── Initialize the route/map screen ──────────
+function enterRouteScreen() {
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('routeScreen').style.display = 'flex';
+  document.getElementById('destName').textContent = winnerHospital.name;
+  document.getElementById('connBadge').textContent = caseId;
+  document.getElementById('connBadge').classList.add('live');
+
+  // Initialize Leaflet map
+  map = L.map('map', {
+    zoomControl: false,
+    attributionControl: false
+  }).setView([winnerHospital.lat, winnerHospital.lng], 15);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
+
+  // Hospital marker (static)
+  hospitalMarker = L.marker([winnerHospital.lat, winnerHospital.lng], { icon: hospitalIcon }).addTo(map);
+
+  // First position ping immediately, then every 30s
+  updatePosition();
+  positionInterval = setInterval(() => {
+    if (!arrived) updatePosition();
+  }, 30000);
+}
+
+// ── Get position & update route ──────────────
+async function updatePosition() {
+  let lat, lng;
+
+  // Try browser geolocation
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true, timeout: 10000, maximumAge: 5000
+      });
+    });
+    lat = pos.coords.latitude;
+    lng = pos.coords.longitude;
+  } catch (e) {
+    // Fallback to a simulated position near Coimbatore for demo
+    console.warn('Geolocation unavailable, using demo coords:', e.message);
+    // Slightly randomize near RS Puram for demo movement
+    lat = 11.0050 + (Math.random() - 0.5) * 0.002;
+    lng = 76.9610 + (Math.random() - 0.5) * 0.002;
+  }
+
+  // POST position to backend
+  try {
+    const posRes = await fetch(`${API}/api/cases/${caseId}/position`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng })
+    });
+    const posData = await posRes.json();
+
+    // Check if we should stop (ETA ≤ 1 min)
+    if (posData.eta_minutes !== undefined && posData.eta_minutes <= 1) {
+      handleArrival();
+      return;
+    }
+  } catch (e) {
+    console.error('Position POST failed:', e);
+  }
+
+  // Fetch full route
+  try {
+    const routeRes = await fetch(`${API}/api/cases/${caseId}/route`);
+    if (routeRes.ok) {
+      const routeData = await routeRes.json();
+      renderRoute(routeData, lat, lng);
+    }
+  } catch (e) {
+    console.error('Route GET failed:', e);
+    // Still update marker position even if route fetch fails
+    updateAmbulanceMarker(lat, lng);
+  }
+}
+
+// ── Render the route on the map ──────────────
+function renderRoute(data, ambLat, ambLng) {
+  // Update ETA and distance display
+  const etaEl = document.getElementById('etaValue');
+  const distEl = document.getElementById('distValue');
+
+  if (data.eta_minutes < 1) {
+    etaEl.innerHTML = '<1 <span class="unit">min</span>';
+  } else {
+    etaEl.innerHTML = `${Math.round(data.eta_minutes)} <span class="unit">min</span>`;
+  }
+  distEl.innerHTML = `${data.distance_km} <span class="unit">km</span>`;
+
+  // Source badge
+  document.getElementById('sourceBadge').textContent = data.source === 'tomtom' ? 'TomTom Live' : 'Haversine';
+
+  // Update ambulance marker
+  updateAmbulanceMarker(ambLat, ambLng);
+
+  // Clear old route lines
+  routeLines.forEach(line => map.removeLayer(line));
+  routeLines = [];
+
+  // Draw traffic-colored polyline segments
+  if (data.polyline && data.polyline.length >= 2) {
+    for (let i = 0; i < data.polyline.length - 1; i++) {
+      const p1 = data.polyline[i];
+      const p2 = data.polyline[i + 1];
+      const color = TRAFFIC_COLORS[p1.traffic] || TRAFFIC_COLORS.unknown;
+      const line = L.polyline(
+        [[p1.lat, p1.lng], [p2.lat, p2.lng]],
+        { color, weight: 5, opacity: 0.85 }
+      ).addTo(map);
+      routeLines.push(line);
+    }
+  }
+
+  // Fit map to show both markers + route
+  const bounds = L.latLngBounds([
+    [ambLat, ambLng],
+    [winnerHospital.lat, winnerHospital.lng]
+  ]);
+  if (data.polyline) {
+    data.polyline.forEach(p => bounds.extend([p.lat, p.lng]));
+  }
+  map.fitBounds(bounds.pad(0.15));
+}
+
+function updateAmbulanceMarker(lat, lng) {
+  if (ambulanceMarker) {
+    ambulanceMarker.setLatLng([lat, lng]);
+  } else {
+    ambulanceMarker = L.marker([lat, lng], { icon: ambulanceIcon }).addTo(map);
+  }
+}
+
+// ── Arrival handling ─────────────────────────
+function handleArrival() {
+  if (arrived) return;
+  arrived = true;
+
+  // Stop the position-ping loop
+  if (positionInterval) {
+    clearInterval(positionInterval);
+    positionInterval = null;
+    console.log('[driver] Position-ping loop STOPPED — ambulance arrived.');
+  }
+
+  // Update display
+  document.getElementById('etaValue').innerHTML = '0 <span class="unit">min</span>';
+  document.getElementById('arrivedHospital').textContent = winnerHospital.name;
+  document.getElementById('arrivedOverlay').classList.add('show');
+}
+
+// ── Connection status check ──────────────────
+async function checkConnection() {
+  try {
+    const res = await fetch(`${API}/`);
+    if (res.ok) {
+      document.getElementById('connBadge').textContent = caseId || 'connected';
+      document.getElementById('connBadge').classList.add('live');
+    }
+  } catch (e) {
+    document.getElementById('connBadge').textContent = 'offline';
+    document.getElementById('connBadge').classList.remove('live');
+  }
+}
+setInterval(checkConnection, 10000);
+</script>
+</body>
+</html>

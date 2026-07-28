@@ -6,3 +6,15 @@ build/
 *.log
 .env.local
 .env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# SQLite
+*.db
+
+# macOS
+.DS_Store
