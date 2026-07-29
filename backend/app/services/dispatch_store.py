@@ -61,6 +61,7 @@ def _init_db():
             "ALTER TABLE cases ADD COLUMN ambulance_lat REAL",
             "ALTER TABLE cases ADD COLUMN ambulance_lng REAL",
             "ALTER TABLE cases ADD COLUMN arriving_soon_sent INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE cases ADD COLUMN arrived_sent INTEGER NOT NULL DEFAULT 0",
         ]:
             try:
                 conn.execute(col_sql)
@@ -174,6 +175,7 @@ def _row_to_case(row) -> dict:
         "ambulance_lat": row["ambulance_lat"] if "ambulance_lat" in row.keys() else None,
         "ambulance_lng": row["ambulance_lng"] if "ambulance_lng" in row.keys() else None,
         "arriving_soon_sent": bool(row["arriving_soon_sent"]) if "arriving_soon_sent" in row.keys() else False,
+        "arrived_sent": bool(row["arrived_sent"]) if "arrived_sent" in row.keys() else False,
     }
 
 
@@ -214,6 +216,23 @@ def is_arriving_soon_sent(case_id: str) -> bool:
             "SELECT arriving_soon_sent FROM cases WHERE case_id = ?", (case_id,)
         ).fetchone()
     return bool(row["arriving_soon_sent"]) if row else False
+
+
+def mark_arrived_sent(case_id: str):
+    """Marks arrived as sent so it fires exactly once per case."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE cases SET arrived_sent = 1 WHERE case_id = ?", (case_id,)
+        )
+        conn.commit()
+
+
+def is_arrived_sent(case_id: str) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT arrived_sent FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+    return bool(row["arrived_sent"]) if row else False
 
 
 _init_db()

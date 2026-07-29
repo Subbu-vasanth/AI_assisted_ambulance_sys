@@ -207,6 +207,10 @@ let positionInterval = null;
 let statusPollInterval = null;
 let arrived = false;
 let winnerHospital = null;
+let startLat = null;
+let startLng = null;
+let currentRoutePoints = null;
+let currentRouteIndex = 0;
 
 // ── Leaflet icon helpers ─────────────────────
 function makeIcon(emoji, size) {
@@ -260,6 +264,8 @@ async function startTracking() {
           lat: data.winner_lat,
           lng: data.winner_lng
         };
+        startLat = data.ambulance_lat || 11.0050;
+        startLng = data.ambulance_lng || 76.9610;
         enterRouteScreen();
       } else if (elapsed >= 60) {
         clearInterval(statusPollInterval);
@@ -304,21 +310,31 @@ function enterRouteScreen() {
 async function updatePosition() {
   let lat, lng;
 
-  // Try browser geolocation
-  try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true, timeout: 10000, maximumAge: 5000
+  // For demo purpose, we check if we already have a calculated route.
+  // If we do, we simulate moving along the polyline points.
+  if (currentRoutePoints && currentRoutePoints.length > 0) {
+    // Advance index by 10% of route length or at least 2 points
+    const step = Math.max(2, Math.ceil(currentRoutePoints.length / 8));
+    currentRouteIndex = Math.min(currentRouteIndex + step, currentRoutePoints.length - 1);
+    lat = currentRoutePoints[currentRouteIndex].lat;
+    lng = currentRoutePoints[currentRouteIndex].lng;
+    console.log(`[Demo Mode] Simulated ambulance movement to point ${currentRouteIndex}/${currentRoutePoints.length - 1}: ${lat}, ${lng}`);
+  } else {
+    // Try browser geolocation
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, timeout: 5000, maximumAge: 5000
+        });
       });
-    });
-    lat = pos.coords.latitude;
-    lng = pos.coords.longitude;
-  } catch (e) {
-    // Fallback to a simulated position near Coimbatore for demo
-    console.warn('Geolocation unavailable, using demo coords:', e.message);
-    // Slightly randomize near RS Puram for demo movement
-    lat = 11.0050 + (Math.random() - 0.5) * 0.002;
-    lng = 76.9610 + (Math.random() - 0.5) * 0.002;
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+    } catch (e) {
+      // Fallback to case starting position
+      console.warn('Geolocation unavailable, using case starting coords:', e.message);
+      lat = startLat || 11.0050;
+      lng = startLng || 76.9610;
+    }
   }
 
   // POST position to backend
@@ -355,6 +371,10 @@ async function updatePosition() {
 
 // ── Render the route on the map ──────────────
 function renderRoute(data, ambLat, ambLng) {
+  // Store polyline points for progressive movement simulation
+  currentRoutePoints = data.polyline;
+  currentRouteIndex = 0;
+
   // Update ETA and distance display
   const etaEl = document.getElementById('etaValue');
   const distEl = document.getElementById('distValue');

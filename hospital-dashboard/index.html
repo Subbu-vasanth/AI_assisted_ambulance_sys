@@ -189,6 +189,14 @@
     font-size: 12px; color: var(--accent); margin-top: 8px;
     font-family: 'SF Mono', Consolas, Menlo, monospace;
   }
+
+  /* ── Arrived banner ──────────────────────── */
+  .arrived-banner {
+    margin-top: 10px; padding: 10px 14px; border-radius: 8px;
+    background: rgba(111,207,151,0.12); border: 1px solid var(--esi5);
+    font-size: 13px; font-weight: 600; color: var(--esi5);
+    display: flex; align-items: center; gap: 8px;
+  }
 </style>
 </head>
 <body>
@@ -385,10 +393,16 @@ function setConn(live) {
 
 function handleEvent(evt) {
   if (evt.type === 'new_request') renderCard(evt);
-  else if (evt.type === 'confirmed') markResolved(evt.request_id, 'accepted', true);
+  else if (evt.type === 'confirmed') {
+    markResolved(evt.request_id, 'accepted', true);
+    if (evt.ambulance_lat && evt.ambulance_lng) {
+      ensureMapForCase(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
+    }
+  }
   else if (evt.type === 'stand_down') markCaseStoodDown(evt.case_id, evt.winner);
   else if (evt.type === 'ambulance_position') handleAmbulancePosition(evt);
   else if (evt.type === 'arriving_soon') handleArrivingSoon(evt);
+  else if (evt.type === 'arrived') handleArrived(evt);
 }
 
 function renderCard(evt) {
@@ -412,7 +426,7 @@ function renderCard(evt) {
       <div class="vital">BP sys<b class="mono">${evt.vitals.bp_systolic_mmhg}</b></div>
       <div class="vital">Temp<b class="mono">${evt.vitals.temperature_celsius}°C</b></div>
       <div class="vital">ETA<b><span class="eta-timer" id="eta-${evt.request_id}">${String(Math.floor(evt.eta_minutes)).padStart(2,'0')}:00</span></b></div>
-      <div class="vital">Dist<b class="mono">${evt.distance_km} km</b></div>
+      <div class="vital">Dist<b class="mono" id="dist-${evt.request_id}">${evt.distance_km} km</b></div>
     </div>
     <div class="rationale">${evt.rationale.join(' · ')}</div>
     <div class="meta-row">
@@ -426,6 +440,9 @@ function renderCard(evt) {
   document.getElementById('feed').prepend(el);
   requests[evt.request_id] = evt;
   startEtaTimer(evt.request_id, evt.eta_minutes);
+  if (evt.ambulance_lat && evt.ambulance_lng) {
+    ensureMapForCase(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
+  }
 }
 
 async function respond(requestId, status) {
@@ -455,6 +472,9 @@ function showHolding(requestId) {
 const timers = {}; // request_id -> { interval, etaEndMs }
 
 function startEtaTimer(requestId, etaMinutes) {
+  if (timers[requestId]) {
+    clearInterval(timers[requestId]);
+  }
   const etaEndMs = Date.now() + etaMinutes * 60 * 1000;
   const span = document.getElementById(`eta-${requestId}`);
   if (!span) return;
@@ -491,8 +511,10 @@ function markResolved(requestId, statusLabel, isWinner) {
   stopEtaTimer(requestId);
   el.classList.add('resolved');
   document.getElementById(`actions-${requestId}`).innerHTML = '';
+  const caseId = requests[requestId] ? requests[requestId].case_id : '';
+  const trackBtn = (isWinner && caseId) ? `<a href="/driver/?case_id=${caseId}" target="_blank" style="display: inline-block; margin-left: 10px; padding: 5px 9px; border-radius: 4px; background: var(--accent); color: #06222A; font-weight: 700; font-size: 11px; text-decoration: none; vertical-align: middle;">🗺 Track Live</a>` : '';
   document.getElementById(`status-${requestId}`).innerHTML =
-    `<span class="status-tag ${statusLabel}">${isWinner ? 'Confirmed — patient inbound' : statusLabel}</span>`;
+    `<span class="status-tag ${statusLabel}" style="vertical-align: middle;">${isWinner ? 'Confirmed — patient inbound' : statusLabel}</span>${trackBtn}`;
 }
 
 function markCaseStoodDown(caseId, winnerName) {
@@ -599,6 +621,13 @@ function ensureMapForCase(caseId, ambLat, ambLng) {
   return caseMaps[caseId];
 }
 
+function getRequestIdForCase(caseId) {
+  for (const [rid, evt] of Object.entries(requests)) {
+    if (evt.case_id === caseId) return rid;
+  }
+  return null;
+}
+
 function handleAmbulancePosition(evt) {
   const mapData = ensureMapForCase(evt.case_id, evt.lat, evt.lng);
   if (mapData) {
@@ -613,6 +642,14 @@ function handleAmbulancePosition(evt) {
       ]);
       mapData.map.fitBounds(bounds.pad(0.2));
     }
+  }
+
+  // Update original vitals row and ETA timer dynamically to prevent UI inconsistency
+  const rid = getRequestIdForCase(evt.case_id);
+  if (rid) {
+    const distEl = document.getElementById(`dist-${rid}`);
+    if (distEl) distEl.textContent = `${evt.distance_km} km`;
+    startEtaTimer(rid, evt.eta_minutes);
   }
 
   // Update live ETA display on the card
@@ -638,6 +675,25 @@ function handleArrivingSoon(evt) {
   const banner = document.createElement('div');
   banner.className = 'arriving-banner';
   banner.innerHTML = `<span class="icon">🚨</span> Ambulance arriving in &lt;5 min (ETA: ${evt.eta_minutes} min)`;
+  card.appendChild(banner);
+}
+
+function handleArrived(evt) {
+  const card = getCardForCase(evt.case_id);
+  if (!card) return;
+
+  // Only show once — check if banner already exists
+  if (card.querySelector('.arrived-banner')) return;
+
+  // Remove arriving banner if it exists
+  const arrSoonBanner = card.querySelector('.arriving-banner');
+  if (arrSoonBanner) {
+    arrSoonBanner.remove();
+  }
+
+  const banner = document.createElement('div');
+  banner.className = 'arrived-banner';
+  banner.innerHTML = `<span class="icon">✅</span> Ambulance has arrived at your hospital!`;
   card.appendChild(banner);
 }
 </script>

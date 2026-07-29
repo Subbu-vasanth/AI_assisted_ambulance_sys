@@ -214,6 +214,7 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
     # 3. Persist the case BEFORE broadcasting, so dispatch_sent events always
     #    have a parent case row (crash-safety — see dispatch_store.py)
     store.save_case(case_id, triage)
+    store.update_ambulance_position(case_id, case_in.location.lat, case_in.location.lng)
 
     # 4. Parallel broadcast (FR-3.3) — send to every candidate, then push a
     #    live WebSocket event to each hospital's connected dashboard
@@ -246,6 +247,8 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
             "symptom_text": case_in.symptom_text,
             "eta_minutes": dispatch_input.eta_minutes,
             "distance_km": c["distance_km"],
+            "ambulance_lat": case_in.location.lat,
+            "ambulance_lng": case_in.location.lng,
         })
 
     # 5. Schedule timeout for auto-widening if no hospital confirms (FR-3.5)
@@ -368,6 +371,8 @@ async def _check_and_widen_dispatch(case_id: str, lat: float, lng: float, specia
             "symptom_text": symptom_text,
             "eta_minutes": dispatch_input.eta_minutes,
             "distance_km": c["distance_km"],
+            "ambulance_lat": lat,
+            "ambulance_lng": lng,
         })
 
     # 6. Only schedule the next timeout check if there's room to widen further.
@@ -392,12 +397,13 @@ def _capacity_rank(status: str) -> int:
     return {"available": 0, "busy": 1, "full": 2}.get(status, 1)
 
 
-async def _finalize_case_selection(case_id: str):
+async def _finalize_case_selection(case_id: str, skip_sleep: bool = False):
     """Waits out the hold window, then ranks every hospital that accepted
     during that window by distance and live capacity, and picks the best
     fit — not just whoever answered first (FR-3.6). Reads/writes through
     the persistent store so this survives a backend restart mid-window."""
-    await asyncio.sleep(ACCEPT_HOLD_WINDOW_SECONDS)
+    if not skip_sleep:
+        await asyncio.sleep(ACCEPT_HOLD_WINDOW_SECONDS)
 
     case = store.get_case(case_id)
     if not case or case["winner"] is not None or not case["candidate_accepts"]:
@@ -429,7 +435,11 @@ async def _finalize_case_selection(case_id: str):
                 "type": "stand_down", "case_id": case_id, "winner": standdown["winner"],
             })
     await manager.send_to_hospital(winner["hospital_id"], {
-        "type": "confirmed", "case_id": case_id, "request_id": winner["request_id"],
+        "type": "confirmed",
+        "case_id": case_id,
+        "request_id": winner["request_id"],
+        "ambulance_lat": case.get("ambulance_lat"),
+        "ambulance_lng": case.get("ambulance_lng"),
     })
 
 
@@ -473,7 +483,7 @@ async def respond_to_request(request_id: str, body: RespondIn, x_hospital_key: s
     # Single-candidate case (most demo scenarios): no point waiting out the
     # full window when there's nobody else to rank against.
     if len(all_requests) == 1:
-        await _finalize_case_selection(case_id)
+        await _finalize_case_selection(case_id, skip_sleep=True)
         return {"status": "accepted", "case_id": case_id, "note": "only candidate — confirmed immediately"}
 
     if not case["ranking_started"]:
@@ -509,8 +519,9 @@ async def update_position(case_id: str, body: PositionIn):
     if case["winner"]:
         hospital = hosp.HOSPITALS.get(case["winner"])
         if hospital:
-            route = routing_service.get_route(
-                body.lat, body.lng, hospital["lat"], hospital["lng"]
+            # Wrap the blocking network call in asyncio.to_thread
+            route = await asyncio.to_thread(
+                routing_service.get_route, body.lat, body.lng, hospital["lat"], hospital["lng"]
             )
             result["distance_km"] = route["distance_km"]
             result["eta_minutes"] = route["eta_minutes"]
@@ -532,6 +543,14 @@ async def update_position(case_id: str, body: PositionIn):
                     "type": "arriving_soon",
                     "case_id": case_id,
                     "eta_minutes": route["eta_minutes"],
+                })
+
+            # Fire arrived exactly once when ETA is ~0
+            if route["eta_minutes"] <= 0.2 and not store.is_arrived_sent(case_id):
+                store.mark_arrived_sent(case_id)
+                await manager.send_to_hospital(case["winner"], {
+                    "type": "arrived",
+                    "case_id": case_id,
                 })
 
     return result

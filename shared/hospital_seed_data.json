@@ -9,7 +9,7 @@
       "trauma",
       "cardiac"
     ],
-    "capacity_status": "full",
+    "capacity_status": "available",
     "avg_response_seconds": 25,
     "access_key": "h001-demo-key"
   },
