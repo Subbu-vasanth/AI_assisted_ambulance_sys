@@ -12,7 +12,7 @@ Manually-tapped flag chips in the ambulance app always take precedence over
 LLM-inferred ones for the same key — if the EMT explicitly marked something,
 that's ground truth; the LLM only fills in gaps the EMT didn't tap.
 
-Requires ANTHROPIC_API_KEY in the environment. If unset, falls back to
+Requires GROQ_API_KEY in the environment. If unset, falls back to
 returning an empty dict (manual-flags-only mode) rather than crashing the
 whole triage flow — an outage here should degrade, not block dispatch.
 """
@@ -20,9 +20,11 @@ whole triage flow — an outage here should degrade, not block dispatch.
 import json
 import os
 
-import anthropic
+from dotenv import load_dotenv
+from openai import OpenAI
 
 _HERE = os.path.dirname(__file__)
+load_dotenv(os.path.join(_HERE, "..", "..", ".env"))
 _REF_PATH = os.path.join(_HERE, "..", "..", "..", "shared", "esi_reference_table.json")
 with open(_REF_PATH) as f:
     _REF = json.load(f)
@@ -40,15 +42,17 @@ Respond with ONLY a JSON object mapping flag names to true/false, no other text,
 no markdown fences, no preamble. Include every flag from the list above."""
 
 _client = None
+_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+_MODEL = "llama-3.3-70b-versatile"
 
 
 def _get_client():
     global _client
     if _client is None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
             return None
-        _client = anthropic.Anthropic(api_key=api_key)
+        _client = OpenAI(api_key=api_key, base_url=_GROQ_BASE_URL)
     return _client
 
 
@@ -66,13 +70,16 @@ def parse_symptoms(symptom_text: str) -> dict:
         return empty_result
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
+        response = client.chat.completions.create(
+            model=_MODEL,
             max_tokens=300,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": symptom_text}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": symptom_text},
+            ],
+            response_format={"type": "json_object"},
         )
-        raw = response.content[0].text.strip()
+        raw = response.choices[0].message.content.strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         parsed = json.loads(raw)
         # Only accept known flags; ignore anything the model hallucinates outside the schema
@@ -96,8 +103,8 @@ if __name__ == "__main__":
         "Fall from ladder, patient conscious, right wrist swollen and deformed, pain 7/10.",
         "Patient reports mild dizziness, vitals stable, requesting precautionary checkup.",
     ]
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY not set — showing graceful-degradation behavior only.")
+    if not os.environ.get("GROQ_API_KEY"):
+        print("GROQ_API_KEY not set — showing graceful-degradation behavior only.")
     for t in test_texts:
         result = parse_symptoms(t)
         active = [k for k, v in result.items() if v]

@@ -111,25 +111,49 @@
   </div>
 </header>
 
-<div id="captureForm">
+<div id="onBoardGate" style="text-align: center; padding: 50px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin: 24px 20px;">
+  <div style="font-size: 56px; margin-bottom: 16px;">🚑</div>
+  <h2 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 10px;">Ambulance Ready · AMB-108</h2>
+  <p style="font-size: 14px; color: var(--text-dim); max-width: 320px; margin: 0 auto 28px; line-height: 1.6;">
+    Is the patient on board? Confirming will start automated vitals capture and activate voice symptom transcription.
+  </p>
+  <button class="primary-btn" id="patientOnBoardBtn" onclick="startTripAutomation()" style="font-size: 16px; padding: 16px 28px; border-radius: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(229, 72, 77, 0.25);">
+    ✓ Yes — Patient On Board (Start Trip)
+  </button>
+</div>
+
+<div id="triageResult" style="display: none;">
+  <section style="border-bottom: none;">
+    <div class="esi-banner" id="esiBanner">
+      <div class="level" id="esiLevel"></div>
+      <div class="label" id="esiLabelText"></div>
+      <div class="specialty" id="esiSpecialty"></div>
+    </div>
+    <div class="section-label">Why (rationale)</div>
+    <div class="rationale-list" id="rationaleList" style="margin-bottom: 14px;"></div>
+    <button class="primary-btn" id="confirmDispatchBtn" onclick="confirmAndDispatch()">✓ EMT Confirm — Dispatch Now</button>
+  </section>
+</div>
+
+<div id="captureForm" style="display: none;">
   <section>
     <div class="section-label">Vitals</div>
     <div class="vitals-grid">
       <div class="vital-field" id="field-hr">
         <label>Heart rate (bpm)</label>
-        <input type="number" id="hr" class="mono" placeholder="—" inputmode="decimal">
+        <input type="number" id="hr" class="mono" placeholder="—" inputmode="decimal" oninput="debouncedRunTriage()">
       </div>
       <div class="vital-field" id="field-spo2">
         <label>SpO2 (%)</label>
-        <input type="number" id="spo2" class="mono" placeholder="—" inputmode="decimal">
+        <input type="number" id="spo2" class="mono" placeholder="—" inputmode="decimal" oninput="debouncedRunTriage()">
       </div>
       <div class="vital-field" id="field-bp">
         <label>BP systolic (mmHg)</label>
-        <input type="number" id="bp" class="mono" placeholder="—" inputmode="decimal">
+        <input type="number" id="bp" class="mono" placeholder="—" inputmode="decimal" oninput="debouncedRunTriage()">
       </div>
       <div class="vital-field" id="field-temp">
         <label>Temperature (°C)</label>
-        <input type="number" id="temp" class="mono" placeholder="—" inputmode="decimal" step="0.1">
+        <input type="number" id="temp" class="mono" placeholder="—" inputmode="decimal" step="0.1" oninput="debouncedRunTriage()">
       </div>
     </div>
     <button class="ble-btn" onclick="autoFillFromDevice()">⎋ Pull from paired monitor (BLE)</button>
@@ -137,7 +161,7 @@
 
   <section>
     <div class="section-label">Symptoms</div>
-    <textarea id="symptomText" placeholder="Describe what you see — or tap the mic and speak"></textarea>
+    <textarea id="symptomText" placeholder="Describe what you see — or tap the mic and speak" oninput="debouncedRunTriage()"></textarea>
     <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎙 Tap to record symptoms</button>
   </section>
 
@@ -147,23 +171,7 @@
   </section>
 
   <section style="border-bottom: none;">
-    <button class="primary-btn" onclick="runTriage()">Run AI Triage Suggestion →</button>
-  </section>
-</div>
-
-<div id="triageResult">
-  <section style="border-bottom: none;">
-    <div class="esi-banner" id="esiBanner">
-      <div class="level" id="esiLevel"></div>
-      <div class="label" id="esiLabelText"></div>
-      <div class="specialty" id="esiSpecialty"></div>
-    </div>
-    <div class="section-label">Why (rationale)</div>
-    <div class="rationale-list" id="rationaleList"></div>
-  </section>
-  <section style="border-bottom: none;">
-    <button class="primary-btn" onclick="confirmAndDispatch()">✓ EMT Confirm — Dispatch Now</button>
-    <button class="secondary-btn" onclick="backToForm()">← Edit vitals / symptoms</button>
+    <button class="primary-btn" id="confirmDispatchBtnBottom" onclick="confirmAndDispatch()">✓ EMT Confirm — Dispatch Now</button>
   </section>
 </div>
 
@@ -220,8 +228,30 @@ function toggleFlag(id) {
   const chip = document.getElementById(`chip-${id}`);
   if (activeFlags.has(id)) { activeFlags.delete(id); chip.classList.remove('active'); }
   else { activeFlags.add(id); chip.classList.add('active'); }
+  runTriage();
 }
 renderFlags();
+
+let triageTimeout = null;
+function debouncedRunTriage() {
+  clearTimeout(triageTimeout);
+  triageTimeout = setTimeout(runTriage, 350);
+}
+
+function startTripAutomation() {
+  const gateEl = document.getElementById('onBoardGate');
+  if (gateEl) gateEl.style.display = 'none';
+  const formEl = document.getElementById('captureForm');
+  if (formEl) formEl.style.display = 'block';
+
+  // 1. Auto-pull vitals from BLE monitor and trigger triage preview
+  autoFillFromDevice();
+
+  // 2. Automatically activate voice recording for symptom transcription
+  setTimeout(() => {
+    toggleVoice();
+  }, 300);
+}
 
 // --- BLE simulation: fills vitals as if pulled from a paired monitor (FR-1.1) ---
 function autoFillFromDevice() {
@@ -230,6 +260,7 @@ function autoFillFromDevice() {
   document.getElementById('bp').value = (95 + Math.random() * 35).toFixed(0);
   document.getElementById('temp').value = (36.4 + Math.random() * 1.4).toFixed(1);
   flagAbnormalFields();
+  runTriage();
 }
 function flagAbnormalFields() {
   const hr = parseFloat(document.getElementById('hr').value);
@@ -280,6 +311,7 @@ async function toggleVoice() {
         const data = await res.json();
         const ta = document.getElementById('symptomText');
         ta.value = (ta.value ? ta.value + ' ' : '') + data.text;
+        runTriage();
       } catch (e) {
         alert(`Voice transcription unavailable: ${e.message}\nType symptoms manually instead.`);
       } finally {
@@ -289,7 +321,7 @@ async function toggleVoice() {
     };
     mediaRecorder.start();
   } catch (e) {
-    alert('Microphone access denied or unavailable — type symptoms manually.');
+    console.warn('Microphone access denied or unavailable — type symptoms manually.', e);
   }
 }
 
@@ -442,19 +474,20 @@ async function runTriage() {
 }
 
 function showTriage(triage) {
-  document.getElementById('captureForm').style.display = 'none';
   document.getElementById('triageResult').style.display = 'block';
-  document.getElementById('esiBanner').dataset.esi = triage.esi_level;
+  const banner = document.getElementById('esiBanner');
+  banner.dataset.esi = triage.esi_level;
   document.getElementById('esiLevel').textContent = `ESI-${triage.esi_level}`;
   document.getElementById('esiLabelText').textContent = `${triage.label} — ${triage.meaning}`;
   document.getElementById('esiSpecialty').textContent = `Specialty required: ${triage.specialty}`;
   document.getElementById('rationaleList').innerHTML =
     triage.rationale.map(r => `· ${r}`).join('<br>');
-}
 
-function backToForm() {
-  document.getElementById('captureForm').style.display = 'block';
-  document.getElementById('triageResult').style.display = 'none';
+  const btnText = `✓ EMT Confirm — Dispatch Now (ESI-${triage.esi_level} · ${triage.label})`;
+  const topBtn = document.getElementById('confirmDispatchBtn');
+  const bottomBtn = document.getElementById('confirmDispatchBtnBottom');
+  if (topBtn) topBtn.textContent = btnText;
+  if (bottomBtn) bottomBtn.textContent = btnText;
 }
 
 function bufferCaseOffline(payload, ESI) {
@@ -467,6 +500,7 @@ function bufferCaseOffline(payload, ESI) {
   localStorage.setItem('offline_cases', JSON.stringify(offlineCases));
 
   document.getElementById('triageResult').style.display = 'none';
+  document.getElementById('captureForm').style.display = 'none';
   document.getElementById('dispatchResult').style.display = 'block';
 
   document.getElementById('dispatchCheck').textContent = '⚠️';
@@ -498,6 +532,7 @@ async function confirmAndDispatch() {
     });
     const data = await res.json();
     document.getElementById('triageResult').style.display = 'none';
+    document.getElementById('captureForm').style.display = 'none';
     document.getElementById('dispatchResult').style.display = 'block';
     document.getElementById('dispatchCheck').textContent = '✓';
     document.getElementById('dispatchCheck').style.color = 'var(--esi5)';
@@ -576,6 +611,8 @@ async function syncOfflineCases() {
 // Initial status check & set sync interval
 updateStatusLine();
 setInterval(updateStatusLine, 5000);
+
+// Automation starts when EMT clicks "Yes - Patient On Board"
 </script>
 </body>
 </html>

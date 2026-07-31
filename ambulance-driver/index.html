@@ -337,12 +337,19 @@ async function updatePosition() {
     }
   }
 
-  // POST position to backend
+  // POST position + live vitals to backend
+  // Simulate BLE sensor vitals with small random fluctuations
+  const liveVitals = {
+    heart_rate_bpm: Math.round(88 + (Math.random() - 0.5) * 20),    // 78–98
+    spo2_percent: Math.round((96 + (Math.random() - 0.5) * 4) * 10) / 10, // 94–98
+    bp_systolic_mmhg: Math.round(130 + (Math.random() - 0.5) * 30), // 115–145
+    temperature_celsius: Math.round((37.0 + (Math.random() - 0.5) * 1.2) * 10) / 10, // 36.4–37.6
+  };
   try {
     const posRes = await fetch(`${API}/api/cases/${caseId}/position`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lng })
+      body: JSON.stringify({ lat, lng, ...liveVitals })
     });
     const posData = await posRes.json();
 

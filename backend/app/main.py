@@ -29,6 +29,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import Optional
 
 # --- wire up sibling modules (shared/, mcp-hospital-server/) ---
 _HERE = os.path.dirname(__file__)
@@ -155,6 +156,19 @@ def _verify_hospital_key(hospital_id: str, key: str):
         raise HTTPException(401, "Invalid or missing hospital access key")
 
 
+@app.get("/api/hospitals/{hospital_id}/active-requests")
+def get_active_requests(hospital_id: str, x_hospital_key: str = Header(...)):
+    """Retrieve all non-terminal requests for this hospital to reconcile UI state on reconnect."""
+    _verify_hospital_key(hospital_id, x_hospital_key)
+    requests = store.get_active_requests_by_hospital(hospital_id)
+    hospital_data = hosp.HOSPITALS.get(hospital_id, {})
+    for r in requests:
+        r["on_duty_doctor_name"] = hospital_data.get("on_duty_doctor_name", "")
+        r["on_duty_doctor_phone"] = hospital_data.get("on_duty_doctor_phone", "")
+        r["emergency_team_phone"] = hospital_data.get("emergency_team_phone", "")
+    return requests
+
+
 
 @app.get("/api/scenarios")
 def list_scenarios():
@@ -235,6 +249,7 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
             "eta_minutes": dispatch_input.eta_minutes,
         })
 
+        hospital_data = hosp.HOSPITALS.get(c["hospital_id"], {})
         await manager.send_to_hospital(c["hospital_id"], {
             "type": "new_request",
             "request_id": resp["request_id"],
@@ -249,6 +264,9 @@ async def submit_case(case_in: CaseIn, case_id_override: str = None):
             "distance_km": c["distance_km"],
             "ambulance_lat": case_in.location.lat,
             "ambulance_lng": case_in.location.lng,
+            "on_duty_doctor_name": hospital_data.get("on_duty_doctor_name", ""),
+            "on_duty_doctor_phone": hospital_data.get("on_duty_doctor_phone", ""),
+            "emergency_team_phone": hospital_data.get("emergency_team_phone", ""),
         })
 
     # 5. Schedule timeout for auto-widening if no hospital confirms (FR-3.5)
@@ -500,6 +518,10 @@ async def respond_to_request(request_id: str, body: RespondIn, x_hospital_key: s
 class PositionIn(BaseModel):
     lat: float
     lng: float
+    heart_rate_bpm: Optional[float] = None
+    spo2_percent: Optional[float] = None
+    bp_systolic_mmhg: Optional[float] = None
+    temperature_celsius: Optional[float] = None
 
 
 @app.post("/api/cases/{case_id}/position")
@@ -512,6 +534,29 @@ async def update_position(case_id: str, body: PositionIn):
         raise HTTPException(404, f"Unknown case_id '{case_id}'")
 
     store.update_ambulance_position(case_id, body.lat, body.lng)
+
+    # Store latest vitals if provided (Feature 1: continuous vitals)
+    live_vitals = {}
+    if body.heart_rate_bpm is not None:
+        live_vitals["heart_rate_bpm"] = body.heart_rate_bpm
+    if body.spo2_percent is not None:
+        live_vitals["spo2_percent"] = body.spo2_percent
+    if body.bp_systolic_mmhg is not None:
+        live_vitals["bp_systolic_mmhg"] = body.bp_systolic_mmhg
+    if body.temperature_celsius is not None:
+        live_vitals["temperature_celsius"] = body.temperature_celsius
+    if live_vitals:
+        store.update_latest_vitals(case_id, live_vitals)
+
+    store.add_vitals_history(
+        case_id,
+        {
+            "heart_rate_bpm": body.heart_rate_bpm,
+            "spo2_percent": body.spo2_percent,
+            "bp_systolic_mmhg": body.bp_systolic_mmhg,
+            "temperature_celsius": body.temperature_celsius,
+        },
+    )
 
     result = {"status": "position_updated", "case_id": case_id}
 
@@ -534,6 +579,7 @@ async def update_position(case_id: str, body: PositionIn):
                 "lng": body.lng,
                 "distance_km": route["distance_km"],
                 "eta_minutes": route["eta_minutes"],
+                **(live_vitals if live_vitals else {}),
             })
 
             # Fire arriving_soon exactly once when ETA first drops below 5 min
@@ -600,6 +646,15 @@ def get_case_status(case_id: str):
         "winner_lat": winner_hospital["lat"] if winner_hospital else None,
         "winner_lng": winner_hospital["lng"] if winner_hospital else None,
     }
+
+
+@app.get("/api/cases/{case_id}/vitals-history")
+def get_case_vitals_history(case_id: str):
+    """Returns the last 20 vitals history entries for a case, newest first."""
+    case = store.get_case(case_id)
+    if not case:
+        raise HTTPException(404, f"Unknown case_id '{case_id}'")
+    return {"case_id": case_id, "history": store.get_vitals_history(case_id)}
 
 
 @app.websocket("/ws/hospital/{hospital_id}")

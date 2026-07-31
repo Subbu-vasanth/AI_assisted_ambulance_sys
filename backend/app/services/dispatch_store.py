@@ -53,7 +53,19 @@ def _init_db():
                 created_at REAL NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS vitals_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                heart_rate_bpm REAL,
+                spo2_percent REAL,
+                bp_systolic_mmhg REAL,
+                temperature_celsius REAL
+            )
+        """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_req_case ON dispatch_requests(case_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vitals_hist ON vitals_history(case_id, timestamp DESC)")
         # Safe migration: add ambulance position + arriving_soon columns if missing.
         # ALTER TABLE ... ADD COLUMN is idempotent-safe in SQLite (errors silently
         # if the column already exists, which we catch and ignore).
@@ -62,6 +74,7 @@ def _init_db():
             "ALTER TABLE cases ADD COLUMN ambulance_lng REAL",
             "ALTER TABLE cases ADD COLUMN arriving_soon_sent INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE cases ADD COLUMN arrived_sent INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE cases ADD COLUMN latest_vitals TEXT",
         ]:
             try:
                 conn.execute(col_sql)
@@ -86,7 +99,7 @@ def save_request(request_id: str, case_id: str, hospital_id: str, hospital_name:
                   eta_minutes: float, distance_km: float):
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO dispatch_requests "
+            "INSERT OR REPLACE INTO dispatch_requests "
             "(request_id, case_id, hospital_id, hospital_name, esi_level, specialty, "
             " vitals, symptom_text, eta_minutes, distance_km, status, sent_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
@@ -176,6 +189,7 @@ def _row_to_case(row) -> dict:
         "ambulance_lng": row["ambulance_lng"] if "ambulance_lng" in row.keys() else None,
         "arriving_soon_sent": bool(row["arriving_soon_sent"]) if "arriving_soon_sent" in row.keys() else False,
         "arrived_sent": bool(row["arrived_sent"]) if "arrived_sent" in row.keys() else False,
+        "latest_vitals": json.loads(row["latest_vitals"]) if ("latest_vitals" in row.keys() and row["latest_vitals"]) else None,
     }
 
 
@@ -188,6 +202,72 @@ def update_ambulance_position(case_id: str, lat: float, lng: float):
             (lat, lng, case_id),
         )
         conn.commit()
+
+
+def update_latest_vitals(case_id: str, vitals: dict):
+    """Overwrites the case's latest vitals snapshot (single field, not history)."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE cases SET latest_vitals = ? WHERE case_id = ?",
+            (json.dumps(vitals), case_id),
+        )
+        conn.commit()
+
+
+def get_latest_vitals(case_id: str):
+    """Returns the latest vitals dict or None."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT latest_vitals FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+    if row and row["latest_vitals"]:
+        return json.loads(row["latest_vitals"])
+    return None
+
+
+def add_vitals_history(case_id: str, vitals: dict):
+    """Appends a vitals log entry and prunes older entries beyond the last 20."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO vitals_history (case_id, timestamp, heart_rate_bpm, spo2_percent, bp_systolic_mmhg, temperature_celsius) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                case_id,
+                time.time(),
+                vitals.get("heart_rate_bpm"),
+                vitals.get("spo2_percent"),
+                vitals.get("bp_systolic_mmhg"),
+                vitals.get("temperature_celsius"),
+            ),
+        )
+        # Cap at last 20 rows per case, drop oldest beyond that
+        conn.execute(
+            "DELETE FROM vitals_history WHERE case_id = ? AND id NOT IN ("
+            "  SELECT id FROM vitals_history WHERE case_id = ? ORDER BY timestamp DESC, id DESC LIMIT 20"
+            ")",
+            (case_id, case_id),
+        )
+        conn.commit()
+
+
+def get_vitals_history(case_id: str) -> list:
+    """Returns vitals history list for a case, newest first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT timestamp, heart_rate_bpm, spo2_percent, bp_systolic_mmhg, temperature_celsius "
+            "FROM vitals_history WHERE case_id = ? ORDER BY timestamp DESC, id DESC",
+            (case_id,),
+        ).fetchall()
+    return [
+        {
+            "timestamp": r["timestamp"],
+            "heart_rate_bpm": r["heart_rate_bpm"],
+            "spo2_percent": r["spo2_percent"],
+            "bp_systolic_mmhg": r["bp_systolic_mmhg"],
+            "temperature_celsius": r["temperature_celsius"],
+        }
+        for r in rows
+    ]
 
 
 def get_ambulance_position(case_id: str):
@@ -235,6 +315,55 @@ def is_arrived_sent(case_id: str) -> bool:
     return bool(row["arrived_sent"]) if row else False
 
 
+def get_active_requests_by_hospital(hospital_id: str) -> list:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT r.*, c.triage, c.winner_hospital_id, c.ranking_started, c.ambulance_lat, c.ambulance_lng, c.latest_vitals, c.arrived_sent
+            FROM dispatch_requests r
+            JOIN cases c ON r.case_id = c.case_id
+            WHERE r.hospital_id = ? AND r.status != 'declined' AND IFNULL(c.arrived_sent, 0) = 0
+            ORDER BY r.sent_at DESC
+            """,
+            (hospital_id,)
+        ).fetchall()
+        
+    results = []
+    for r in rows:
+        db_status = r["status"]
+        winner = r["winner_hospital_id"]
+        
+        if db_status == "accepted":
+            if winner == hospital_id:
+                status = "confirmed"
+            elif winner is not None:
+                status = "stood_down"
+            else:
+                status = "accepted"
+        else:
+            status = db_status
+            
+        results.append({
+            "request_id": r["request_id"],
+            "case_id": r["case_id"],
+            "hospital_id": r["hospital_id"],
+            "hospital_name": r["hospital_name"],
+            "esi_level": r["esi_level"],
+            "specialty": r["specialty"],
+            "vitals": json.loads(r["latest_vitals"]) if (r["latest_vitals"]) else json.loads(r["vitals"]),
+            "symptom_text": r["symptom_text"],
+            "eta_minutes": r["eta_minutes"],
+            "distance_km": r["distance_km"],
+            "status": status,
+            "sent_at": r["sent_at"],
+            "response_at": r["response_at"],
+            "triage": json.loads(r["triage"]) if r["triage"] else {},
+            "ambulance_lat": r["ambulance_lat"],
+            "ambulance_lng": r["ambulance_lng"],
+        })
+    return results
+
+
 _init_db()
 
 
@@ -258,6 +387,12 @@ if __name__ == "__main__":
     print(f"Requests for case ({len(reqs)}):")
     for r in reqs:
         print(f"  {r['hospital_name']}: {r['status']}")
+
+    for i in range(25):
+        add_vitals_history(test_case, {"heart_rate_bpm": 80 + i, "spo2_percent": 98, "bp_systolic_mmhg": 120, "temperature_celsius": 37.0})
+    hist = get_vitals_history(test_case)
+    assert len(hist) == 20, f"Expected 20 history entries, got {len(hist)}"
+    assert hist[0]["heart_rate_bpm"] == 104, f"Expected newest HR=104, got {hist[0]['heart_rate_bpm']}"
 
     assert case["winner"] == "H001"
     assert len(reqs) == 2

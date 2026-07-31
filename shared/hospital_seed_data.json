@@ -11,7 +11,10 @@
     ],
     "capacity_status": "available",
     "avg_response_seconds": 25,
-    "access_key": "h001-demo-key"
+    "access_key": "h001-demo-key",
+    "on_duty_doctor_name": "Dr. Rajesh Kumar",
+    "on_duty_doctor_phone": "+919876543201",
+    "emergency_team_phone": "+919876500001"
   },
   {
     "hospital_id": "H002",
@@ -23,7 +26,10 @@
     ],
     "capacity_status": "available",
     "avg_response_seconds": 20,
-    "access_key": "h002-demo-key"
+    "access_key": "h002-demo-key",
+    "on_duty_doctor_name": "Dr. Priya Natarajan",
+    "on_duty_doctor_phone": "+919876543202",
+    "emergency_team_phone": "+919876500002"
   },
   {
     "hospital_id": "H003",
@@ -36,7 +42,10 @@
     ],
     "capacity_status": "available",
     "avg_response_seconds": 30,
-    "access_key": "h003-demo-key"
+    "access_key": "h003-demo-key",
+    "on_duty_doctor_name": "Dr. Suresh Menon",
+    "on_duty_doctor_phone": "+919876543203",
+    "emergency_team_phone": "+919876500003"
   },
   {
     "hospital_id": "H004",
@@ -49,7 +58,10 @@
     ],
     "capacity_status": "busy",
     "avg_response_seconds": 45,
-    "access_key": "h004-demo-key"
+    "access_key": "h004-demo-key",
+    "on_duty_doctor_name": "Dr. Anitha Selvam",
+    "on_duty_doctor_phone": "+919876543204",
+    "emergency_team_phone": "+919876500004"
   },
   {
     "hospital_id": "H005",
@@ -62,7 +74,10 @@
     ],
     "capacity_status": "available",
     "avg_response_seconds": 35,
-    "access_key": "h005-demo-key"
+    "access_key": "h005-demo-key",
+    "on_duty_doctor_name": "Dr. Vikram Chandran",
+    "on_duty_doctor_phone": "+919876543205",
+    "emergency_team_phone": "+919876500005"
   },
   {
     "hospital_id": "H006",
@@ -75,7 +90,10 @@
     ],
     "capacity_status": "available",
     "avg_response_seconds": 28,
-    "access_key": "h006-demo-key"
+    "access_key": "h006-demo-key",
+    "on_duty_doctor_name": "Dr. Lakshmi Iyer",
+    "on_duty_doctor_phone": "+919876543206",
+    "emergency_team_phone": "+919876500006"
   },
   {
     "hospital_id": "H007",
@@ -88,6 +106,9 @@
     ],
     "capacity_status": "full",
     "avg_response_seconds": 50,
-    "access_key": "h007-demo-key"
+    "access_key": "h007-demo-key",
+    "on_duty_doctor_name": "Dr. Mohan Rajan",
+    "on_duty_doctor_phone": "+919876543207",
+    "emergency_team_phone": "+919876500007"
   }
 ]

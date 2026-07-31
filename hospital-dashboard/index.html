@@ -67,36 +67,94 @@
   .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
   .conn-dot.live { background: var(--esi5); box-shadow: 0 0 6px var(--esi5); }
 
-  main { padding: 24px 28px; max-width: 980px; margin: 0 auto; }
+  main {
+    padding: 16px 20px;
+    margin: 0 auto;
+    height: calc(100vh - 65px);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-width: 1700px;
+  }
 
   .sim-panel {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 10px;
-    padding: 14px 18px;
-    margin-bottom: 24px;
+    padding: 10px 16px;
+    margin-bottom: 14px;
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
   .sim-panel .label { color: var(--text-dim); font-size: 12px; margin-right: 4px; }
   .sim-panel button { font-size: 12px; padding: 6px 10px; }
 
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr 340px;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .panel-header h2 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header .count {
+    background: var(--accent); color: #06222A; font-size: 11px;
+    padding: 1px 7px; border-radius: 10px; font-weight: 800;
+  }
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+  }
+
   .empty {
     text-align: center;
-    padding: 80px 20px;
+    padding: 60px 20px;
     color: var(--text-faint);
   }
-  .empty .glyph { font-size: 34px; margin-bottom: 12px; opacity: 0.5; }
+  .empty .glyph { font-size: 30px; margin-bottom: 10px; opacity: 0.5; }
 
+  /* ── Incoming Cards ────────────────────────────────── */
   .card {
     position: relative;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 10px;
-    padding: 18px 20px 18px 24px;
-    margin-bottom: 14px;
+    padding: 14px 16px 14px 22px;
+    margin-bottom: 12px;
     overflow: hidden;
     animation: slideIn 0.25s ease-out;
   }
@@ -108,8 +166,11 @@
     left: 0; top: 0; bottom: 0;
     width: 5px;
   }
-  .card[data-esi="1"]::before, .card[data-esi="2"]::before { animation: pulse 1.4s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes pulse-fast { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  @keyframes pulse-slow { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .card[data-esi="1"]::before, .card[data-esi="2"]::before { animation: pulse-fast 0.8s infinite ease-in-out; }
+  .card[data-esi="3"]::before { animation: pulse-slow 2.0s infinite ease-in-out; }
 
   .card[data-esi="1"] { border-color: var(--esi1); background: linear-gradient(90deg, var(--esi1-bg), var(--panel) 60%); }
   .card[data-esi="1"]::before { background: var(--esi1); }
@@ -120,11 +181,11 @@
   .card[data-esi="5"]::before { background: var(--esi5); }
 
   .card.resolved { opacity: 0.45; }
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
   .esi-badge {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-    padding: 4px 9px; border-radius: 20px;
+    padding: 3px 8px; border-radius: 20px;
   }
   .esi-badge[data-esi="1"] { color: var(--esi1); background: var(--esi1-bg); }
   .esi-badge[data-esi="2"] { color: var(--esi2); background: var(--esi2-bg); }
@@ -133,15 +194,15 @@
   .esi-badge[data-esi="5"] { color: var(--esi5); background: var(--esi5-bg); }
 
   .case-id { color: var(--text-faint); font-size: 11px; }
-  .symptom { font-size: 14px; margin: 10px 0; line-height: 1.5; }
-  .vitals-row { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0; }
-  .vital { font-size: 12px; color: var(--text-dim); }
-  .vital b { color: var(--text); font-size: 14px; display: block; }
-  .rationale { font-size: 11px; color: var(--text-faint); margin: 8px 0 14px; line-height: 1.6; }
+  .symptom { font-size: 13px; margin: 8px 0; line-height: 1.4; }
+  .vitals-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; }
+  .vital { font-size: 11px; color: var(--text-dim); }
+  .vital b { color: var(--text); font-size: 13px; display: block; }
+  .rationale { font-size: 11px; color: var(--text-faint); margin: 6px 0 12px; line-height: 1.5; }
   .meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
   .actions { display: flex; gap: 8px; }
-  .btn-accept { background: var(--esi5); color: #0A1F14; border: none; font-weight: 600; }
-  .btn-decline { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }
+  .btn-accept { background: var(--esi5); color: #0A1F14; border: none; font-weight: 600; cursor: pointer; }
+  .btn-decline { background: transparent; color: var(--text-dim); border: 1px solid var(--line); cursor: pointer; }
   .btn-accept:hover { filter: brightness(1.1); }
   .status-tag { font-size: 11px; padding: 3px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
   .status-tag.accepted { background: var(--esi5-bg); color: var(--esi5); }
@@ -149,7 +210,7 @@
   .status-tag.stood_down { background: var(--panel-raised); color: var(--text-faint); }
 
   /* ── ETA Countdown ──────────────────────────────────── */
-  .eta-timer { font-size: 14px; font-weight: 700; font-family: 'SF Mono', Consolas, Menlo, monospace; color: var(--accent); }
+  .eta-timer { font-size: 13px; font-weight: 700; font-family: 'SF Mono', Consolas, Menlo, monospace; color: var(--accent); }
   .eta-timer.warning { color: var(--esi2); animation: etaPulse 1s infinite; }
   .eta-timer.arriving {
     color: var(--esi1);
@@ -157,46 +218,118 @@
     padding: 2px 8px;
     border-radius: 6px;
     border: 1px solid var(--esi1);
-    animation: etaFlash 0.6s infinite;
-    letter-spacing: 0.04em;
-    font-size: 11px;
-    text-transform: uppercase;
+    animation: etaPulse 0.5s infinite;
   }
-  @keyframes etaPulse  { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
-  @keyframes etaFlash  { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-  /* ── Embedded ambulance tracking map ─────── */
-  .amb-map-container {
-    margin-top: 14px; border-radius: 8px; overflow: hidden;
-    border: 1px solid var(--line); height: 180px;
+  .eta-timer.arrived {
+    color: var(--esi5);
+    background: var(--esi5-bg);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--esi5);
   }
-  .amb-map-container .leaflet-container {
-    height: 100%; width: 100%; background: var(--bg);
+  @keyframes etaPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
   }
 
-  /* ── Arriving soon banner ─────────────────── */
   .arriving-banner {
-    margin-top: 10px; padding: 10px 14px; border-radius: 8px;
-    background: rgba(229,72,77,0.12); border: 1px solid var(--esi1);
-    font-size: 13px; font-weight: 600; color: var(--esi1);
-    display: flex; align-items: center; gap: 8px;
-    animation: etaFlash 1.2s infinite;
+    margin-top: 10px;
+    background: var(--esi1-bg);
+    border: 1px solid var(--esi1);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--esi1);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: etaPulse 1s infinite;
   }
-  .arriving-banner .icon { font-size: 18px; }
+  .arriving-banner .icon { font-size: 14px; }
 
-  /* ── Live ETA update on card ──────────────── */
-  .live-eta {
-    font-size: 12px; color: var(--accent); margin-top: 8px;
-    font-family: 'SF Mono', Consolas, Menlo, monospace;
-  }
-
-  /* ── Arrived banner ──────────────────────── */
   .arrived-banner {
-    margin-top: 10px; padding: 10px 14px; border-radius: 8px;
-    background: rgba(111,207,151,0.12); border: 1px solid var(--esi5);
-    font-size: 13px; font-weight: 600; color: var(--esi5);
-    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px;
+    background: var(--esi5-bg);
+    border: 1px solid var(--esi5);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--esi5);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
+  .arrived-banner .icon { font-size: 14px; }
+
+  /* ── Right Sidebar Rows ─────────────────────────────── */
+  .sidebar-row {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s ease;
+    animation: slideIn 0.25s ease-out;
+  }
+  .sidebar-row:hover {
+    background: var(--panel-raised);
+  }
+  .sidebar-row.active {
+    background: rgba(76, 195, 201, 0.1);
+    border-left: 3px solid var(--accent);
+  }
+  .sidebar-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── Center Detail Panel ────────────────────────────── */
+  .detail-vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .detail-vital-card {
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .detail-vital-card .label {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .detail-vital-card .value {
+    font-size: 18px;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .detail-vital-card .unit {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  #vitalsHistoryTableBody tr {
+    border-bottom: 1px solid var(--line);
+    transition: background 0.5s ease;
+  }
+  #vitalsHistoryTableBody td {
+    padding: 6px 10px;
+  }
+  .doctor-row {
+    display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 4px;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .doctor-row a {
+    color: var(--accent); text-decoration: none; font-weight: 600;
+  }
+  .doctor-row a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -249,10 +382,125 @@
     <button onclick="simulate('fever_general')">Fever</button>
   </div>
 
-  <div id="feed"></div>
-  <div class="empty" id="emptyState">
-    <div class="glyph">◎</div>
-    No active requests. Waiting for ambulance dispatch…
+  <div class="dashboard-grid">
+    <!-- Left Panel: Incoming Queue -->
+    <div class="panel left-panel">
+      <div class="panel-header">
+        <h2>Incoming Queue</h2>
+      </div>
+      <div class="panel-body" id="feed">
+        <div class="empty" id="emptyState">
+          <div class="glyph">◎</div>
+          No incoming requests. Waiting for ambulance dispatch…
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Panel: Patient Detail -->
+    <div class="panel center-panel" id="centerPanel">
+      <div class="panel-header">
+        <h2>Patient Detail</h2>
+      </div>
+      <div class="panel-body">
+        <div class="empty" id="centerEmptyState" style="margin-top: 60px;">
+          <div class="glyph">ℹ️</div>
+          Select a case from Active cases to view details
+        </div>
+        <div id="patientDetailContent" style="display: none;">
+          <!-- Detail header -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px;">
+            <div>
+              <span id="detailEsiBadge" class="esi-badge"></span>
+              <div id="detailCaseId" class="case-id mono" style="margin-top: 6px;"></div>
+            </div>
+            <div id="detailStatusBadge"></div>
+          </div>
+
+          <!-- Symptom & specialty -->
+          <div style="margin-bottom: 18px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 6px;">Symptom & Specialty</div>
+            <div id="detailSymptom" style="font-size: 14px; line-height: 1.5; color: var(--text);"></div>
+            <div id="detailSpecialty" style="font-size: 12px; color: var(--text-dim); margin-top: 4px;" class="mono"></div>
+          </div>
+
+          <!-- Current vitals grid -->
+          <div style="margin-bottom: 18px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 8px;">Current Vitals</div>
+            <div class="detail-vitals-grid">
+              <div class="detail-vital-card">
+                <span class="label">Heart Rate</span>
+                <span class="value mono" id="detailVhr">—</span>
+                <span class="unit">bpm</span>
+              </div>
+              <div class="detail-vital-card">
+                <span class="label">SpO2</span>
+                <span class="value mono" id="detailVspo2">—</span>
+                <span class="unit">%</span>
+              </div>
+              <div class="detail-vital-card">
+                <span class="label">BP Sys</span>
+                <span class="value mono" id="detailVbp">—</span>
+                <span class="unit">mmHg</span>
+              </div>
+              <div class="detail-vital-card">
+                <span class="label">Temperature</span>
+                <span class="value mono" id="detailVtemp">—</span>
+                <span class="unit">°C</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Track Live Map toggle -->
+          <div style="margin-bottom: 18px;">
+            <button id="trackLiveBtn" onclick="toggleDetailMap()" style="padding: 9px 14px; border-radius: 6px; background: var(--accent); color: #06222A; font-weight: 700; font-size: 12px; border: none; cursor: pointer; width: 100%; margin-bottom: 8px;">🗺 Track Live</button>
+            <div id="detailMapContainer" style="display: none;" class="detail-map-container">
+              <div id="detailMap" style="height: 230px; width: 100%; border-radius: 8px; border: 1px solid var(--line); overflow: hidden;"></div>
+            </div>
+          </div>
+
+          <!-- Rationale -->
+          <div style="margin-bottom: 18px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 6px;">Triage Rationale</div>
+            <ul id="detailRationale" style="font-size: 12px; color: var(--text-dim); line-height: 1.6; padding-left: 18px; margin: 0;"></ul>
+          </div>
+
+          <!-- Vitals History timeline -->
+          <div style="margin-bottom: 24px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; margin-bottom: 8px;">Vitals History (30s Updates)</div>
+            <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                <thead style="background: var(--panel-raised); color: var(--text-dim); position: sticky; top: 0;">
+                  <tr>
+                    <th style="padding: 6px 10px; border-bottom: 1px solid var(--line);">Time</th>
+                    <th style="padding: 6px 10px; border-bottom: 1px solid var(--line);">HR</th>
+                    <th style="padding: 6px 10px; border-bottom: 1px solid var(--line);">SpO2</th>
+                    <th style="padding: 6px 10px; border-bottom: 1px solid var(--line);">BP</th>
+                    <th style="padding: 6px 10px; border-bottom: 1px solid var(--line);">Temp</th>
+                  </tr>
+                </thead>
+                <tbody id="vitalsHistoryTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Doctor Info Footer -->
+          <div id="detailFooter" style="border-top: 1px solid var(--line); padding-top: 14px; font-size: 12px; color: var(--text-dim);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Active/Accepted Cases -->
+    <div class="panel right-panel">
+      <div class="panel-header">
+        <h2>Active Cases <span class="count" id="sidebarCount">0</span></h2>
+      </div>
+      <div class="panel-body" id="sidebarEntries" style="padding: 0;">
+        <div class="empty" id="rightEmptyState" style="margin-top: 60px;">
+          <div class="glyph">◎</div>
+          No accepted cases
+        </div>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -267,6 +515,7 @@ let currentKey = null;
 let ws = null;
 let reconnectInterval = null;
 const requests = {}; // request_id -> element + data
+const timers = {};   // request_id -> interval id
 
 async function loadHospitalOptions() {
   const res = await fetch(`${API}/api/hospitals`);
@@ -352,8 +601,7 @@ function connect() {
       ws.close();
     } catch(e) {}
   }
-  
-  ws = new WebSocket(`${WS_BASE}/ws/hospital/${currentHospital}?key=${encodeURIComponent(currentKey)}`);
+ws = new WebSocket(`${WS_BASE}/ws/hospital/${currentHospital}?key=${encodeURIComponent(currentKey)}`);
   
   ws.onopen = () => {
     setConn(true);
@@ -361,6 +609,7 @@ function connect() {
       clearInterval(reconnectInterval);
       reconnectInterval = null;
     }
+    syncActiveRequests();
   };
   
   ws.onclose = () => {
@@ -375,6 +624,88 @@ function connect() {
   ws.onmessage = (msg) => handleEvent(JSON.parse(msg.data));
 }
 
+let selectedRequestId = null;
+let selectedCaseId = null;
+let detailMapObj = null;
+
+async function syncActiveRequests() {
+  if (!currentHospital || !currentKey) return;
+  try {
+    const res = await fetch(`${API}/api/hospitals/${currentHospital}/active-requests`, {
+      headers: { 'X-Hospital-Key': currentKey }
+    });
+    if (!res.ok) return;
+    const activeRequests = await res.json();
+    
+    document.getElementById('feed').innerHTML = `
+      <div class="empty" id="emptyState">
+        <div class="glyph">◎</div>
+        No incoming requests. Waiting for ambulance dispatch…
+      </div>
+    `;
+    document.getElementById('sidebarEntries').innerHTML = `
+      <div class="empty" id="rightEmptyState" style="margin-top: 60px;">
+        <div class="glyph">◎</div>
+        No accepted cases
+      </div>
+    `;
+    Object.keys(requests).forEach(k => delete requests[k]);
+    Object.keys(timers).forEach(k => { clearInterval(timers[k]); delete timers[k]; });
+
+    activeRequests.forEach(req => {
+      if (req.arrived_sent || req.arrived) return;
+      const cardEvt = {
+        request_id: req.request_id,
+        case_id: req.case_id,
+        esi_level: req.esi_level,
+        esi_label: req.triage ? req.triage.label : '',
+        specialty: req.specialty,
+        rationale: req.triage ? req.triage.rationale : [],
+        vitals: req.vitals || {},
+        symptom_text: req.symptom_text,
+        eta_minutes: req.eta_minutes,
+        distance_km: req.distance_km,
+        ambulance_lat: req.ambulance_lat,
+        ambulance_lng: req.ambulance_lng,
+        on_duty_doctor_name: req.on_duty_doctor_name,
+        on_duty_doctor_phone: req.on_duty_doctor_phone,
+        emergency_team_phone: req.emergency_team_phone,
+        status: req.status
+      };
+      
+      requests[req.request_id] = cardEvt;
+      
+      if (req.status === 'pending') {
+        renderCard(cardEvt);
+      } else if (req.status === 'accepted' || req.status === 'confirmed') {
+        addSidebarEntry(req.request_id, cardEvt);
+      }
+    });
+
+    updateEmptyStates();
+    if (selectedRequestId && requests[selectedRequestId] && document.getElementById(`sb-${selectedRequestId}`)) {
+      selectCase(selectedRequestId);
+    } else {
+      resetCenterPanel();
+    }
+  } catch (e) {
+    console.error("Failed to sync active requests:", e);
+  }
+}
+
+function updateEmptyStates() {
+  const cards = document.querySelectorAll('#feed .card');
+  const emptyEl = document.getElementById('emptyState');
+  if (emptyEl) emptyEl.style.display = cards.length === 0 ? 'block' : 'none';
+
+  const sbCards = document.querySelectorAll('#sidebarEntries .sidebar-row');
+  const rightEmptyEl = document.getElementById('rightEmptyState');
+  if (rightEmptyEl) rightEmptyEl.style.display = sbCards.length === 0 ? 'block' : 'none';
+
+  const sbCountEl = document.getElementById('sidebarCount');
+  if (sbCountEl) sbCountEl.textContent = sbCards.length;
+}
+
 function scheduleReconnect() {
   if (reconnectInterval) return;
   reconnectInterval = setInterval(() => {
@@ -385,50 +716,69 @@ function scheduleReconnect() {
   }, 3000);
 }
 
-
 function setConn(live) {
   document.getElementById('connDot').classList.toggle('live', live);
   document.getElementById('connText').textContent = live ? 'live' : 'disconnected';
 }
 
 function handleEvent(evt) {
-  if (evt.type === 'new_request') renderCard(evt);
-  else if (evt.type === 'confirmed') {
-    markResolved(evt.request_id, 'accepted', true);
-    if (evt.ambulance_lat && evt.ambulance_lng) {
-      ensureMapForCase(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
-    }
+  if (evt.type === 'new_request') {
+    requests[evt.request_id] = evt;
+    renderCard(evt);
   }
-  else if (evt.type === 'stand_down') markCaseStoodDown(evt.case_id, evt.winner);
-  else if (evt.type === 'ambulance_position') handleAmbulancePosition(evt);
-  else if (evt.type === 'arriving_soon') handleArrivingSoon(evt);
-  else if (evt.type === 'arrived') handleArrived(evt);
+  else if (evt.type === 'confirmed') {
+    const req = requests[evt.request_id];
+    if (req) {
+      req.status = 'confirmed';
+      const feedCard = document.getElementById(`req-${evt.request_id}`);
+      if (feedCard) feedCard.remove();
+      addSidebarEntry(evt.request_id, req);
+      if (selectedRequestId === evt.request_id) {
+        updateDetailStatusBadge(req);
+      }
+    }
+    updateEmptyStates();
+  }
+  else if (evt.type === 'stand_down') {
+    markCaseStoodDown(evt.case_id, evt.winner);
+  }
+  else if (evt.type === 'ambulance_position') {
+    handleAmbulancePosition(evt);
+  }
+  else if (evt.type === 'arriving_soon') {
+    handleArrivingSoon(evt);
+  }
+  else if (evt.type === 'arrived') {
+    handleArrived(evt);
+  }
 }
 
 function renderCard(evt) {
-  document.getElementById('emptyState').style.display = 'none';
+  const emptyEl = document.getElementById('emptyState');
+  if (emptyEl) emptyEl.style.display = 'none';
   const el = document.createElement('div');
   el.className = 'card';
   el.dataset.esi = evt.esi_level;
   el.id = `req-${evt.request_id}`;
+
   el.innerHTML = `
     <div class="card-top">
       <div>
-        <span class="esi-badge" data-esi="${evt.esi_level}">ESI-${evt.esi_level} · ${evt.esi_label}</span>
-        <div class="case-id mono">${evt.case_id} · ${evt.specialty}</div>
+        <span class="esi-badge" data-esi="${evt.esi_level}">ESI-${evt.esi_level} · ${evt.esi_label || ''}</span>
+        <div class="case-id mono" style="margin-top:4px;">${evt.case_id} · ${evt.specialty || ''}</div>
       </div>
       <div class="case-id mono">${evt.request_id}</div>
     </div>
-    <div class="symptom">${evt.symptom_text}</div>
+    <div class="symptom">${evt.symptom_text || ''}</div>
     <div class="vitals-row">
-      <div class="vital">HR<b class="mono">${evt.vitals.heart_rate_bpm}</b></div>
-      <div class="vital">SpO2<b class="mono">${evt.vitals.spo2_percent}%</b></div>
-      <div class="vital">BP sys<b class="mono">${evt.vitals.bp_systolic_mmhg}</b></div>
-      <div class="vital">Temp<b class="mono">${evt.vitals.temperature_celsius}°C</b></div>
-      <div class="vital">ETA<b><span class="eta-timer" id="eta-${evt.request_id}">${String(Math.floor(evt.eta_minutes)).padStart(2,'0')}:00</span></b></div>
-      <div class="vital">Dist<b class="mono" id="dist-${evt.request_id}">${evt.distance_km} km</b></div>
+      <div class="vital">HR<b class="mono" id="vhr-${evt.request_id}">${evt.vitals.heart_rate_bpm || '—'}</b></div>
+      <div class="vital">SpO2<b class="mono" id="vspo2-${evt.request_id}">${evt.vitals.spo2_percent ? evt.vitals.spo2_percent + '%' : '—'}</b></div>
+      <div class="vital">BP sys<b class="mono" id="vbp-${evt.request_id}">${evt.vitals.bp_systolic_mmhg || '—'}</b></div>
+      <div class="vital">Temp<b class="mono" id="vtemp-${evt.request_id}">${evt.vitals.temperature_celsius ? evt.vitals.temperature_celsius + '°C' : '—'}</b></div>
+      <div class="vital">ETA<b><span class="eta-timer" id="eta-${evt.request_id}">${String(Math.floor(evt.eta_minutes || 0)).padStart(2,'0')}:00</span></b></div>
+      <div class="vital">Dist<b class="mono" id="dist-${evt.request_id}">${evt.distance_km || 0} km</b></div>
     </div>
-    <div class="rationale">${evt.rationale.join(' · ')}</div>
+    <div class="rationale">${(evt.rationale || []).join(' · ')}</div>
     <div class="meta-row">
       <span id="status-${evt.request_id}"></span>
       <div class="actions" id="actions-${evt.request_id}">
@@ -438,11 +788,8 @@ function renderCard(evt) {
     </div>
   `;
   document.getElementById('feed').prepend(el);
-  requests[evt.request_id] = evt;
   startEtaTimer(evt.request_id, evt.eta_minutes);
-  if (evt.ambulance_lat && evt.ambulance_lng) {
-    ensureMapForCase(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
-  }
+  updateEmptyStates();
 }
 
 async function respond(requestId, status) {
@@ -450,97 +797,208 @@ async function respond(requestId, status) {
     method: 'POST', headers: {'Content-Type': 'application/json', 'X-Hospital-Key': currentKey},
     body: JSON.stringify({status})
   });
+  if (!res.ok) return;
   const data = await res.json();
   if (status === 'declined') {
-    markResolved(requestId, 'declined', false);
+    const el = document.getElementById(`req-${requestId}`);
+    if (el) el.remove();
+    stopEtaTimer(requestId);
+    updateEmptyStates();
   } else {
-    // Don't assume we won yet — FR-3.6 holds accepts briefly to rank against
-    // any other near-simultaneous accepts. Real resolution comes via the
-    // 'confirmed' or 'stand_down' WebSocket events once ranking finishes.
-    showHolding(requestId);
+    markAccepted(requestId);
   }
 }
 
-function showHolding(requestId) {
-  const actionsEl = document.getElementById(`actions-${requestId}`);
-  if (actionsEl) actionsEl.innerHTML = '<span style="color: var(--text-faint); font-size: 12px;">awaiting ranking…</span>';
-  const statusEl = document.getElementById(`status-${requestId}`);
-  if (statusEl) statusEl.innerHTML = '<span class="status-tag" style="background: var(--panel-raised); color: var(--text-dim);">Accepted — confirming best match</span>';
+function markAccepted(requestId) {
+  const el = document.getElementById(`req-${requestId}`);
+  if (el) el.remove();
+  const evt = requests[requestId];
+  if (evt) {
+    evt.status = 'accepted';
+    addSidebarEntry(requestId, evt);
+    selectCase(requestId);
+  }
+  updateEmptyStates();
 }
 
-// ── ETA Timer management ──────────────────────────────────────────────────────
-const timers = {}; // request_id -> { interval, etaEndMs }
+function addSidebarEntry(requestId, evt) {
+  if (document.getElementById(`sb-${requestId}`)) return;
+  const container = document.getElementById('sidebarEntries');
+  const row = document.createElement('div');
+  row.className = 'sidebar-row';
+  row.id = `sb-${requestId}`;
+  row.onclick = () => selectCase(requestId);
 
-function startEtaTimer(requestId, etaMinutes) {
-  if (timers[requestId]) {
-    clearInterval(timers[requestId]);
+  row.innerHTML = `
+    <div class="sidebar-row-left">
+      <span class="esi-badge" data-esi="${evt.esi_level}">ESI-${evt.esi_level}</span>
+      <span class="case-id mono">${evt.case_id}</span>
+    </div>
+    <div class="eta-timer" id="sb-eta-${requestId}">--:--</div>
+  `;
+  container.prepend(row);
+  startEtaTimer(requestId, evt.eta_minutes);
+  updateEmptyStates();
+}
+
+function resetCenterPanel() {
+  selectedRequestId = null;
+  selectedCaseId = null;
+  const centerEmptyEl = document.getElementById('centerEmptyState');
+  if (centerEmptyEl) centerEmptyEl.style.display = 'block';
+  const detailEl = document.getElementById('patientDetailContent');
+  if (detailEl) detailEl.style.display = 'none';
+  document.querySelectorAll('.sidebar-row').forEach(el => el.classList.remove('active'));
+}
+
+async function selectCase(requestId) {
+  selectedRequestId = requestId;
+  const evt = requests[requestId];
+  if (!evt) return;
+  selectedCaseId = evt.case_id;
+
+  document.querySelectorAll('.sidebar-row').forEach(el => el.classList.remove('active'));
+  const rowEl = document.getElementById(`sb-${requestId}`);
+  if (rowEl) rowEl.classList.add('active');
+
+  const centerEmptyEl = document.getElementById('centerEmptyState');
+  if (centerEmptyEl) centerEmptyEl.style.display = 'none';
+  const detailEl = document.getElementById('patientDetailContent');
+  if (detailEl) detailEl.style.display = 'block';
+
+  const esiBadge = document.getElementById('detailEsiBadge');
+  esiBadge.textContent = `ESI-${evt.esi_level} · ${evt.esi_label || ''}`;
+  esiBadge.setAttribute('data-esi', evt.esi_level);
+  
+  document.getElementById('detailCaseId').textContent = `${evt.case_id} · Request ${evt.request_id}`;
+
+  document.getElementById('detailSymptom').textContent = evt.symptom_text || 'No symptom text recorded.';
+  document.getElementById('detailSpecialty').textContent = evt.specialty ? `Specialty: ${evt.specialty}` : '';
+
+  updateDetailStatusBadge(evt);
+
+  const vitals = evt.vitals || {};
+  document.getElementById('detailVhr').textContent = vitals.heart_rate_bpm !== undefined && vitals.heart_rate_bpm !== null ? vitals.heart_rate_bpm : '—';
+  document.getElementById('detailVspo2').textContent = vitals.spo2_percent !== undefined && vitals.spo2_percent !== null ? vitals.spo2_percent : '—';
+  document.getElementById('detailVbp').textContent = vitals.bp_systolic_mmhg !== undefined && vitals.bp_systolic_mmhg !== null ? vitals.bp_systolic_mmhg : '—';
+  document.getElementById('detailVtemp').textContent = vitals.temperature_celsius !== undefined && vitals.temperature_celsius !== null ? vitals.temperature_celsius : '—';
+
+  const rationaleEl = document.getElementById('detailRationale');
+  const rationaleList = evt.rationale || [];
+  rationaleEl.innerHTML = rationaleList.map(r => `<li style="margin-bottom: 4px;">${r}</li>`).join('');
+
+  const footerEl = document.getElementById('detailFooter');
+  let docHtml = '';
+  if (evt.on_duty_doctor_name) {
+    docHtml = `<div class="doctor-row" style="margin: 0; font-size: 13px;">
+      <span>👨‍⚕️ On-Duty Doctor: <a href="tel:${evt.on_duty_doctor_phone || ''}">${evt.on_duty_doctor_name}</a></span>
+      ${evt.emergency_team_phone ? `<span style="margin-left: 14px;">🚨 <a href="tel:${evt.emergency_team_phone}">Call Emergency Team</a></span>` : ''}
+    </div>`;
   }
-  const etaEndMs = Date.now() + etaMinutes * 60 * 1000;
-  const span = document.getElementById(`eta-${requestId}`);
-  if (!span) return;
+  footerEl.innerHTML = docHtml;
 
-  function tick() {
-    const remainMs = etaEndMs - Date.now();
-    if (remainMs <= 0) {
-      span.textContent = 'ARRIVING NOW';
-      span.className = 'eta-timer arriving';
+  const mapContainer = document.getElementById('detailMapContainer');
+  mapContainer.style.display = 'none';
+  document.getElementById('trackLiveBtn').textContent = '🗺 Track Live';
+
+  fetchVitalsHistory(evt.case_id);
+}
+
+function getTrackedStatus(evt) {
+  if (evt.status === 'pending') return 'PENDING';
+  if (evt.arrived || (evt.eta_minutes !== undefined && evt.eta_minutes <= 0.2)) return 'ARRIVED';
+  if (evt.arriving_soon || (evt.eta_minutes !== undefined && evt.eta_minutes < 5)) return 'ARRIVING SOON (<5MIN)';
+  return 'ACCEPTED';
+}
+
+function updateDetailStatusBadge(evt) {
+  const badge = document.getElementById('detailStatusBadge');
+  if (!badge) return;
+  const statusStr = getTrackedStatus(evt);
+  let bg = 'var(--panel-raised)';
+  let color = 'var(--text-dim)';
+  if (statusStr === 'ARRIVED') {
+    bg = 'rgba(111,207,151,0.15)';
+    color = 'var(--esi5)';
+  } else if (statusStr === 'ARRIVING SOON (<5MIN)') {
+    bg = 'rgba(229,72,77,0.15)';
+    color = 'var(--esi1)';
+  } else if (statusStr === 'ACCEPTED') {
+    bg = 'rgba(76,195,201,0.15)';
+    color = 'var(--accent)';
+  }
+  badge.innerHTML = `<span style="font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: ${bg}; color: ${color}; text-transform: uppercase;">${statusStr}</span>`;
+}
+
+async function fetchVitalsHistory(caseId) {
+  const tbody = document.getElementById('vitalsHistoryTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-faint);">Loading history...</td></tr>';
+  try {
+    const res = await fetch(`${API}/api/cases/${caseId}/vitals-history`);
+    if (!res.ok) throw new Error('Failed to fetch vitals history');
+    const data = await res.json();
+    const history = data.history || [];
+    tbody.innerHTML = '';
+    if (history.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-faint);">No 30s history recorded yet.</td></tr>';
       return;
     }
-    const totalSec = Math.ceil(remainMs / 1000);
-    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
-    const ss = String(totalSec % 60).padStart(2, '0');
-    span.textContent = `${mm}:${ss}`;
-    span.className = 'eta-timer' + (remainMs < 2 * 60 * 1000 ? ' warning' : '');
-  }
-
-  tick(); // immediate first render
-  timers[requestId] = setInterval(tick, 1000);
-}
-
-function stopEtaTimer(requestId) {
-  if (timers[requestId]) {
-    clearInterval(timers[requestId]);
-    delete timers[requestId];
+    history.forEach(row => appendVitalsHistoryRow(row, false));
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--esi1);">Failed to load vitals history</td></tr>';
   }
 }
 
-// ── Card resolution helpers ───────────────────────────────────────────────────
-function markResolved(requestId, statusLabel, isWinner) {
-  const el = document.getElementById(`req-${requestId}`);
-  if (!el) return;
-  stopEtaTimer(requestId);
-  el.classList.add('resolved');
-  document.getElementById(`actions-${requestId}`).innerHTML = '';
-  const caseId = requests[requestId] ? requests[requestId].case_id : '';
-  const trackBtn = (isWinner && caseId) ? `<a href="/driver/?case_id=${caseId}" target="_blank" style="display: inline-block; margin-left: 10px; padding: 5px 9px; border-radius: 4px; background: var(--accent); color: #06222A; font-weight: 700; font-size: 11px; text-decoration: none; vertical-align: middle;">🗺 Track Live</a>` : '';
-  document.getElementById(`status-${requestId}`).innerHTML =
-    `<span class="status-tag ${statusLabel}" style="vertical-align: middle;">${isWinner ? 'Confirmed — patient inbound' : statusLabel}</span>${trackBtn}`;
+function appendVitalsHistoryRow(row, isNewTop = false) {
+  const tbody = document.getElementById('vitalsHistoryTableBody');
+  if (!tbody) return;
+  if (tbody.querySelector('td[colspan]')) {
+    tbody.innerHTML = '';
+  }
+  const tr = document.createElement('tr');
+  const timeStr = new Date(row.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  tr.innerHTML = `
+    <td class="mono">${timeStr}</td>
+    <td class="mono">${row.heart_rate_bpm !== null && row.heart_rate_bpm !== undefined ? row.heart_rate_bpm : '—'}</td>
+    <td class="mono">${row.spo2_percent !== null && row.spo2_percent !== undefined ? row.spo2_percent + '%' : '—'}</td>
+    <td class="mono">${row.bp_systolic_mmhg !== null && row.bp_systolic_mmhg !== undefined ? row.bp_systolic_mmhg : '—'}</td>
+    <td class="mono">${row.temperature_celsius !== null && row.temperature_celsius !== undefined ? row.temperature_celsius + '°C' : '—'}</td>
+  `;
+  if (isNewTop) {
+    tr.style.background = 'rgba(76, 195, 201, 0.2)';
+    tbody.insertBefore(tr, tbody.firstChild);
+    setTimeout(() => { tr.style.background = ''; }, 2000);
+  } else {
+    tbody.appendChild(tr);
+  }
 }
 
-function markCaseStoodDown(caseId, winnerName) {
-  Object.entries(requests).forEach(([rid, evt]) => {
-    if (evt.case_id === caseId) {
-      const el = document.getElementById(`req-${rid}`);
-      if (el && !el.classList.contains('resolved')) {
-        stopEtaTimer(rid);
-        el.classList.add('resolved');
-        const actionsEl = document.getElementById(`actions-${rid}`);
-        if (actionsEl) actionsEl.innerHTML = '';
-        document.getElementById(`status-${rid}`).innerHTML =
-          `<span class="status-tag stood_down">Assigned to ${winnerName}</span>`;
-      }
+function toggleDetailMap() {
+  const mapContainer = document.getElementById('detailMapContainer');
+  const btn = document.getElementById('trackLiveBtn');
+  if (!mapContainer || !btn) return;
+
+  if (mapContainer.style.display === 'none') {
+    mapContainer.style.display = 'block';
+    btn.textContent = 'Hide Live Map';
+    const evt = requests[selectedRequestId];
+    if (evt && evt.ambulance_lat && evt.ambulance_lng) {
+      ensureDetailMap(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
+    } else if (evt) {
+      fetch(`${API}/api/cases/${evt.case_id}/status`).then(r => r.json()).then(data => {
+        if (data.ambulance && data.ambulance.lat && data.ambulance.lng) {
+          evt.ambulance_lat = data.ambulance.lat;
+          evt.ambulance_lng = data.ambulance.lng;
+          ensureDetailMap(evt.case_id, evt.ambulance_lat, evt.ambulance_lng);
+        }
+      }).catch(() => {});
     }
-  });
+  } else {
+    mapContainer.style.display = 'none';
+    btn.textContent = '🗺 Track Live';
+  }
 }
-
-async function simulate(scenario) {
-  await fetch(`${API}/api/simulate/${scenario}`, { method: 'POST' });
-}
-
-loadHospitalOptions();
-
-// ── Ambulance tracking maps (per case_id) ────────────────────────────────────
-const caseMaps = {};  // case_id -> { map, ambulanceMarker, hospitalMarker }
 
 function makeTrackingIcon(emoji, size) {
   return L.divIcon({
@@ -553,44 +1011,27 @@ function makeTrackingIcon(emoji, size) {
 const ambIcon = makeTrackingIcon('🚑', 22);
 const hospIcon = makeTrackingIcon('🏥', 20);
 
-function getCardForCase(caseId) {
-  // Find the card element for this case_id by checking our requests map
-  for (const [rid, evt] of Object.entries(requests)) {
-    if (evt.case_id === caseId) {
-      return document.getElementById(`req-${rid}`);
-    }
-  }
-  return null;
-}
+function ensureDetailMap(caseId, ambLat, ambLng) {
+  const mapEl = document.getElementById('detailMap');
+  if (!mapEl) return;
 
-function ensureMapForCase(caseId, ambLat, ambLng) {
-  if (caseMaps[caseId]) return caseMaps[caseId];
-
-  const card = getCardForCase(caseId);
-  if (!card) return null;
-
-  // Don't add a map if there's already one
-  if (card.querySelector('.amb-map-container')) {
-    return null;
+  if (detailMapObj && detailMapObj.caseId === caseId) {
+    detailMapObj.ambulanceMarker.setLatLng([ambLat, ambLng]);
+    setTimeout(() => detailMapObj.map.invalidateSize(), 50);
+    return;
   }
 
-  // Get hospital coords from the card's request data
-  // We need to fetch hospital info; use the status endpoint
-  const container = document.createElement('div');
-  container.className = 'amb-map-container';
-  container.id = `map-${caseId}`;
-  card.appendChild(container);
+  if (detailMapObj && detailMapObj.map) {
+    detailMapObj.map.remove();
+    detailMapObj = null;
+  }
 
-  const mapEl = document.createElement('div');
-  mapEl.style.height = '100%';
-  mapEl.style.width = '100%';
-  container.appendChild(mapEl);
-
+  mapEl.innerHTML = '';
   const trackMap = L.map(mapEl, {
-    zoomControl: false,
+    zoomControl: true,
     attributionControl: false,
     dragging: true,
-    scrollWheelZoom: false
+    scrollWheelZoom: true
   }).setView([ambLat, ambLng], 14);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -600,25 +1041,21 @@ function ensureMapForCase(caseId, ambLat, ambLng) {
   const ambulanceMarker = L.marker([ambLat, ambLng], { icon: ambIcon }).addTo(trackMap);
   let hospitalMarker = null;
 
-  // Fetch hospital location
+  detailMapObj = { map: trackMap, ambulanceMarker, hospitalMarker, caseId };
+
   fetch(`${API}/api/cases/${caseId}/status`).then(r => r.json()).then(data => {
-    if (data.winner_lat && data.winner_lng) {
+    if (data.winner_lat && data.winner_lng && detailMapObj && detailMapObj.caseId === caseId) {
       hospitalMarker = L.marker([data.winner_lat, data.winner_lng], { icon: hospIcon }).addTo(trackMap);
       const bounds = L.latLngBounds([
         [ambLat, ambLng],
         [data.winner_lat, data.winner_lng]
       ]);
-      trackMap.fitBounds(bounds.pad(0.2));
-      caseMaps[caseId].hospitalMarker = hospitalMarker;
+      trackMap.fitBounds(bounds.pad(0.25));
+      detailMapObj.hospitalMarker = hospitalMarker;
     }
   }).catch(e => console.error('Failed to fetch case status for map:', e));
 
-  caseMaps[caseId] = { map: trackMap, ambulanceMarker, hospitalMarker };
-
-  // Force Leaflet to recalculate dimensions after DOM insertion
   setTimeout(() => trackMap.invalidateSize(), 100);
-
-  return caseMaps[caseId];
 }
 
 function getRequestIdForCase(caseId) {
@@ -629,73 +1066,166 @@ function getRequestIdForCase(caseId) {
 }
 
 function handleAmbulancePosition(evt) {
-  const mapData = ensureMapForCase(evt.case_id, evt.lat, evt.lng);
-  if (mapData) {
-    // Move ambulance marker directly (no animation)
-    mapData.ambulanceMarker.setLatLng([evt.lat, evt.lng]);
+  for (const [rid, req] of Object.entries(requests)) {
+    if (req.case_id === evt.case_id) {
+      req.ambulance_lat = evt.lat;
+      req.ambulance_lng = evt.lng;
+      req.distance_km = evt.distance_km;
+      req.eta_minutes = evt.eta_minutes;
+      if (evt.heart_rate_bpm !== undefined) {
+        req.vitals = req.vitals || {};
+        if (evt.heart_rate_bpm !== null) req.vitals.heart_rate_bpm = evt.heart_rate_bpm;
+        if (evt.spo2_percent !== null) req.vitals.spo2_percent = evt.spo2_percent;
+        if (evt.bp_systolic_mmhg !== null) req.vitals.bp_systolic_mmhg = evt.bp_systolic_mmhg;
+        if (evt.temperature_celsius !== null) req.vitals.temperature_celsius = evt.temperature_celsius;
+      }
 
-    // Refit bounds if we have hospital marker
-    if (mapData.hospitalMarker) {
-      const bounds = L.latLngBounds([
-        [evt.lat, evt.lng],
-        mapData.hospitalMarker.getLatLng()
-      ]);
-      mapData.map.fitBounds(bounds.pad(0.2));
+      const isWarn = (evt.eta_minutes * 60 * 1000) < 5 * 60 * 1000;
+      if (isWarn && !req.arriving_soon && evt.eta_minutes > 0.2) {
+        req.arriving_soon = true;
+      }
+      if (evt.eta_minutes <= 0.2 || evt.arrived) {
+        req.arrived = true;
+        handleArrived(evt);
+        return;
+      }
+
+      if (selectedRequestId === rid) {
+        document.getElementById('detailVhr').textContent = req.vitals.heart_rate_bpm !== undefined && req.vitals.heart_rate_bpm !== null ? req.vitals.heart_rate_bpm : '—';
+        document.getElementById('detailVspo2').textContent = req.vitals.spo2_percent !== undefined && req.vitals.spo2_percent !== null ? req.vitals.spo2_percent + '%' : '—';
+        document.getElementById('detailVbp').textContent = req.vitals.bp_systolic_mmhg !== undefined && req.vitals.bp_systolic_mmhg !== null ? req.vitals.bp_systolic_mmhg : '—';
+        document.getElementById('detailVtemp').textContent = req.vitals.temperature_celsius !== undefined && req.vitals.temperature_celsius !== null ? req.vitals.temperature_celsius + '°C' : '—';
+        
+        updateDetailStatusBadge(req);
+
+        const mapContainer = document.getElementById('detailMapContainer');
+        if (mapContainer && mapContainer.style.display !== 'none') {
+          ensureDetailMap(evt.case_id, evt.lat, evt.lng);
+        }
+
+        if (evt.heart_rate_bpm !== undefined && evt.heart_rate_bpm !== null) {
+          appendVitalsHistoryRow({
+            timestamp: Date.now() / 1000,
+            heart_rate_bpm: evt.heart_rate_bpm,
+            spo2_percent: evt.spo2_percent,
+            bp_systolic_mmhg: evt.bp_systolic_mmhg,
+            temperature_celsius: evt.temperature_celsius
+          }, true);
+        }
+      }
+
+      const sbEta = document.getElementById(`sb-eta-${rid}`);
+      if (sbEta && !timers[rid]) {
+        sbEta.textContent = `${String(Math.floor(evt.eta_minutes || 0)).padStart(2,'0')}:00`;
+      }
     }
-  }
-
-  // Update original vitals row and ETA timer dynamically to prevent UI inconsistency
-  const rid = getRequestIdForCase(evt.case_id);
-  if (rid) {
-    const distEl = document.getElementById(`dist-${rid}`);
-    if (distEl) distEl.textContent = `${evt.distance_km} km`;
-    startEtaTimer(rid, evt.eta_minutes);
-  }
-
-  // Update live ETA display on the card
-  const card = getCardForCase(evt.case_id);
-  if (card) {
-    let liveEl = card.querySelector('.live-eta');
-    if (!liveEl) {
-      liveEl = document.createElement('div');
-      liveEl.className = 'live-eta';
-      card.appendChild(liveEl);
-    }
-    liveEl.textContent = `🚑 Live: ${evt.distance_km} km · ETA ${evt.eta_minutes} min`;
   }
 }
 
 function handleArrivingSoon(evt) {
-  const card = getCardForCase(evt.case_id);
-  if (!card) return;
-
-  // Only show once — check if banner already exists
-  if (card.querySelector('.arriving-banner')) return;
-
-  const banner = document.createElement('div');
-  banner.className = 'arriving-banner';
-  banner.innerHTML = `<span class="icon">🚨</span> Ambulance arriving in &lt;5 min (ETA: ${evt.eta_minutes} min)`;
-  card.appendChild(banner);
+  const rid = getRequestIdForCase(evt.case_id);
+  if (rid) {
+    const req = requests[rid];
+    if (req) {
+      req.arriving_soon = true;
+      req.eta_minutes = evt.eta_minutes;
+      if (selectedRequestId === rid) {
+        updateDetailStatusBadge(req);
+      }
+    }
+  }
 }
 
 function handleArrived(evt) {
-  const card = getCardForCase(evt.case_id);
-  if (!card) return;
+  const rid = getRequestIdForCase(evt.case_id);
+  if (rid) {
+    const sbEl = document.getElementById(`sb-${rid}`);
+    if (sbEl) sbEl.remove();
+    const reqEl = document.getElementById(`req-${rid}`);
+    if (reqEl) reqEl.remove();
+    stopEtaTimer(rid);
+    delete requests[rid];
+    if (selectedCaseId === evt.case_id || selectedRequestId === rid) {
+      resetCenterPanel();
+    }
+  }
+  updateEmptyStates();
+}
 
-  // Only show once — check if banner already exists
-  if (card.querySelector('.arrived-banner')) return;
+function markCaseStoodDown(caseId, winnerName) {
+  Object.entries(requests).forEach(([rid, evt]) => {
+    if (evt.case_id === caseId) {
+      const sbEl = document.getElementById(`sb-${rid}`);
+      if (sbEl) sbEl.remove();
+      const reqEl = document.getElementById(`req-${rid}`);
+      if (reqEl) reqEl.remove();
+      stopEtaTimer(rid);
+      delete requests[rid];
+      if (selectedCaseId === caseId) {
+        resetCenterPanel();
+      }
+    }
+  });
+  updateEmptyStates();
+}
 
-  // Remove arriving banner if it exists
-  const arrSoonBanner = card.querySelector('.arriving-banner');
-  if (arrSoonBanner) {
-    arrSoonBanner.remove();
+function startEtaTimer(requestId, etaMinutes) {
+  if (timers[requestId]) {
+    clearInterval(timers[requestId]);
+  }
+  const etaEndMs = Date.now() + (etaMinutes || 0) * 60 * 1000;
+
+  function tick() {
+    const evt = requests[requestId];
+    const sbSpan = document.getElementById(`sb-eta-${requestId}`);
+    const feedSpan = document.getElementById(`eta-${requestId}`);
+
+    if (evt && evt.arrived) {
+      const txt = 'ARRIVED';
+      if (sbSpan) { sbSpan.textContent = txt; sbSpan.className = 'eta-timer arrived'; }
+      if (feedSpan) { feedSpan.textContent = txt; feedSpan.className = 'eta-timer arrived'; }
+      return;
+    }
+
+    const remainMs = etaEndMs - Date.now();
+    if (remainMs <= 0) {
+      const txt = 'ARRIVING NOW';
+      if (sbSpan) { sbSpan.textContent = txt; sbSpan.className = 'eta-timer arriving'; }
+      if (feedSpan) { feedSpan.textContent = txt; feedSpan.className = 'eta-timer arriving'; }
+      return;
+    }
+    const totalSec = Math.ceil(remainMs / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    const isWarn = remainMs < 5 * 60 * 1000;
+    const txt = `${mm}:${ss}`;
+    if (sbSpan) { sbSpan.textContent = txt; sbSpan.className = 'eta-timer' + (isWarn ? ' warning' : ''); }
+    if (feedSpan) { feedSpan.textContent = txt; feedSpan.className = 'eta-timer' + (isWarn ? ' warning' : ''); }
+
+    if (selectedRequestId === requestId && evt && !evt.arrived) {
+      if (isWarn && !evt.arriving_soon) {
+        evt.arriving_soon = true;
+        updateDetailStatusBadge(evt);
+      }
+    }
   }
 
-  const banner = document.createElement('div');
-  banner.className = 'arrived-banner';
-  banner.innerHTML = `<span class="icon">✅</span> Ambulance has arrived at your hospital!`;
-  card.appendChild(banner);
+  tick();
+  timers[requestId] = setInterval(tick, 1000);
 }
+
+function stopEtaTimer(requestId) {
+  if (timers[requestId]) {
+    clearInterval(timers[requestId]);
+    delete timers[requestId];
+  }
+}
+
+async function simulate(scenario) {
+  await fetch(`${API}/api/simulate/${scenario}`, { method: 'POST' });
+}
+
+loadHospitalOptions();
 </script>
 </body>
 </html>
